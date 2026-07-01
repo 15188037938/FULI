@@ -1,49 +1,514 @@
-<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>幸运转盘</title><link rel="stylesheet" href="style.css">
-<style>.wheel-container{position:relative;width:340px;height:340px;margin:0 auto}#wheelCanvas{display:block;width:100%;height:100%}.pointer-outer{position:absolute;top:-18px;left:50%;transform:translateX(-50%);z-index:3}.pointer-inner{width:0;height:0;border-left:16px solid transparent;border-right:16px solid transparent;border-top:32px solid #fbbf24;filter:drop-shadow(0 2px 6px rgba(0,0,0,.3))}.center-btn{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;cursor:pointer;z-index:2;border:4px solid var(--bg);box-shadow:0 4px 20px rgba(99,102,241,.4);line-height:1.2;text-align:center}.center-btn:hover{transform:translate(-50%,-50%) scale(1.05)}.center-btn.spinning{opacity:.7}.result-card{display:flex;align-items:center;gap:12px;padding:16px 20px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);margin-top:16px}.result-icon{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:20px;font-weight:700}.cost-tag{padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}.cost-tag.free{background:rgba(34,197,94,.15);color:var(--success)}.cost-tag.paid{background:rgba(245,158,11,.15);color:var(--warning)}</style></head><body>
-<div class="bg-particles"></div><div class="toast-container" id="toastContainer"></div>
-<div class="container"><div class="header"><h1>幸运转盘</h1><p>转动转盘，赢取积分</p></div>
-<div id="lotteryNotice" class="card hidden" style="text-align:center;padding:12px 16px;margin-bottom:16px;background:rgba(99,102,241,.05);border-color:rgba(99,102,241,.2)"><div id="lotteryNoticeText" style="font-size:13px;line-height:1.8;white-space:pre-wrap"></div></div>
-<div class="stats-row"><div class="stat-item"><div class="stat-value" style="color:var(--warning)" id="freeDraws">0</div><div class="stat-label">免费次数</div></div><div class="stat-item"><div class="stat-value" style="color:var(--primary-light)" id="myPoints">0</div><div class="stat-label">积分余额<button class="btn btn-sm" style="padding:2px 10px;font-size:11px;margin-left:6px;background:rgba(99,102,241,.15);color:var(--primary-light);border:1px solid var(--primary);border-radius:12px;cursor:pointer" onclick="showRecharge()">充值</button></div></div></div>
-<div class="wheel-container"><div class="pointer-outer"><div class="pointer-inner"></div></div><canvas id="wheelCanvas" width="680" height="680"></canvas><div class="center-btn" id="spinBtn" onclick="spin()">抽奖</div></div>
-<div style="text-align:center;padding:10px;font-size:13px;color:var(--text-muted);margin-top:8px"><span class="cost-tag free">免费</span> 优先免费次数，无则消耗 <b style="color:var(--primary-light)">1积分</b>/次</div>
-<div id="resultArea" class="hidden"><div class="result-card" id="resultCard"></div></div>
-<a href="index.html" class="btn btn-outline btn-sm back-btn" style="text-decoration:none" title="返回首页"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>返回</a></div>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>幸运转盘</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .wheel-container {
+    position:relative;
+    width:340px; height:340px;
+    margin:0 auto;
+  }
+  #wheelCanvas { display:block; width:100%; height:100%; }
+  .pointer-outer {
+    position:absolute; top:-18px; left:50%; transform:translateX(-50%);
+    z-index:3;
+  }
+  .pointer-inner {
+    width:0; height:0;
+    border-left:16px solid transparent;
+    border-right:16px solid transparent;
+    border-top:32px solid #fbbf24;
+    filter:drop-shadow(0 2px 6px rgba(0,0,0,.3));
+  }
+  .center-btn {
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:72px; height:72px; border-radius:50%;
+    background:linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color:#fff; display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:14px; cursor:pointer; z-index:2;
+    border:4px solid var(--bg); box-shadow:0 4px 20px rgba(99,102,241,.4);
+    transition:transform .15s; user-select:none;
+    line-height:1.2; text-align:center;
+  }
+  .center-btn:hover { transform:translate(-50%,-50%) scale(1.05); }
+  .center-btn:active { transform:translate(-50%,-50%) scale(.95); }
+  .center-btn.spinning { cursor:not-allowed; opacity:.7; }
 
-<script src="api-client.js"></script>
+  .result-card {
+    display:flex; align-items:center; gap:12px;
+    padding:16px 20px;
+    background:var(--bg-card); border:1px solid var(--border);
+    border-radius:var(--radius); margin-top:16px;
+    animation: fadeIn .3s ease;
+  }
+  .result-card .result-icon {
+    width:48px; height:48px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0; font-size:20px; font-weight:700;
+  }
+  .result-card .result-info { flex:1; }
+  .result-card .result-name { font-size:16px; font-weight:600; }
+  .result-card .result-desc { font-size:12px; color:var(--text-muted); margin-top:2px; }
+
+  .prize-list {
+    display:grid; grid-template-columns:repeat(4,1fr); gap:8px;
+    font-size:12px;
+  }
+  .prize-item {
+    padding:8px 4px; background:var(--bg);
+    border:1px solid var(--border); border-radius:var(--radius-sm);
+    text-align:center;
+  }
+  .prize-item .pi-name { font-weight:600; }
+  .prize-item .pi-prob { color:var(--text-muted); font-size:11px; }
+
+  .cost-indicator {
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    padding:10px; margin-top:8px;
+    font-size:13px; color:var(--text-muted); text-align:center;
+  }
+  .cost-indicator .cost-tag {
+    padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600;
+  }
+  .cost-tag.free { background:rgba(34,197,94,.15); color:var(--success); }
+  .cost-tag.paid { background:rgba(245,158,11,.15); color:var(--warning); }
+</style>
+</head>
+<body>
+<div class="bg-particles"></div>
+<div class="toast-container" id="toastContainer"></div>
+
+<div class="container">
+  <div class="header">
+    <h1>幸运转盘</h1>
+    <p>转动转盘，赢取积分</p>
+  </div>
+
+  <!-- 抽奖说明 -->
+  <div id="lotteryNotice" class="card hidden" style="text-align:center;padding:12px 16px;margin-bottom:16px;background:rgba(99,102,241,.05);border-color:rgba(99,102,241,.2);">
+    <div id="lotteryNoticeText" style="font-size:13px;line-height:1.8;white-space:pre-wrap;"></div>
+  </div>
+
+  <!-- 余额状态 -->
+  <div class="stats-row">
+    <div class="stat-item">
+      <div class="stat-value" style="color:var(--warning);" id="freeDraws">0</div>
+      <div class="stat-label">免费次数</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value" style="color:var(--primary-light);" id="myPoints">0</div>
+      <div class="stat-label">
+        积分余额
+        <button class="btn btn-sm" id="rechargeBtn" style="padding:2px 10px;font-size:11px;margin-left:6px;background:rgba(99,102,241,.15);color:var(--primary-light);border:1px solid var(--primary);border-radius:12px;cursor:pointer;" onclick="showRechargeModal()">充值</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 转盘区 -->
+  <div class="wheel-container" id="wheelContainer">
+    <div class="pointer-outer"><div class="pointer-inner"></div></div>
+    <canvas id="wheelCanvas" width="680" height="680"></canvas>
+    <div class="center-btn" id="spinBtn" onclick="spin()">抽奖</div>
+  </div>
+
+  <!-- 消耗提示 -->
+  <div class="cost-indicator" id="costHint">
+    <span class="cost-tag free">免费</span> 优先使用免费次数，无免费次数消耗 <span style="color:var(--primary-light);font-weight:600;">1 积分</span>/次
+  </div>
+
+  <!-- 结果展示 -->
+  <div id="resultArea" class="hidden">
+    <div class="result-card" id="resultCard"></div>
+  </div>
+
+  <a href="index.html" class="btn btn-outline btn-sm back-btn" style="text-decoration:none;" title="返回首页">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+    返回
+  </a>
+
+</div>
+
 <script>
-const FP=(()=>{const p=[navigator.platform||'',screen.width+'x'+screen.height+'x'+screen.colorDepth,new Date().getTimezoneOffset(),navigator.hardwareConcurrency||0,navigator.language||''];return'fp_'+btoa(p.join('|')).slice(0,24).replace(/[^a-zA-Z0-9]/g,'');})();
-function toast(m,t='info'){const e=document.createElement('div');e.className='toast '+t;e.textContent=m;document.getElementById('toastContainer').appendChild(e);setTimeout(()=>{e.style.opacity='0';e.style.transition='opacity .3s';setTimeout(()=>e.remove(),300)},2500)}
+// ========== 奖品配置（默认值，可由管理员修改权重） ==========
+const DEFAULT_PRIZES = [
+  { id:0, name:'100积分', weight:1,  color:'#f43f5e', dotColor:'#fecdd3', points:100 },
+  { id:1, name:'70积分',  weight:1,  color:'#f97316', dotColor:'#fed7aa', points:70 },
+  { id:2, name:'50积分',  weight:2,  color:'#eab308', dotColor:'#fef08a', points:50 },
+  { id:3, name:'20积分',  weight:3,  color:'#22c55e', dotColor:'#bbf7d0', points:20 },
+  { id:4, name:'10积分',  weight:5,  color:'#14b8a6', dotColor:'#99f6e4', points:10 },
+  { id:5, name:'5积分',   weight:8,  color:'#3b82f6', dotColor:'#bfdbfe', points:5 },
+  { id:6, name:'1积分',   weight:60, color:'#8b5cf6', dotColor:'#ddd6fe', points:1 },
+  { id:7, name:'谢谢参与', weight:20, color:'#6b7280', dotColor:'#d1d5db', points:0 },
+];
 
-const DEFAULTS=[{id:0,name:'100积分',weight:1,color:'#f43f5e',dotColor:'#fecdd3',points:100},{id:1,name:'70积分',weight:1,color:'#f97316',dotColor:'#fed7aa',points:70},{id:2,name:'50积分',weight:2,color:'#eab308',dotColor:'#fef08a',points:50},{id:3,name:'20积分',weight:3,color:'#22c55e',dotColor:'#bbf7d0',points:20},{id:4,name:'10积分',weight:5,color:'#14b8a6',dotColor:'#99f6e4',points:10},{id:5,name:'5积分',weight:8,color:'#3b82f6',dotColor:'#bfdbfe',points:5},{id:6,name:'1积分',weight:60,color:'#8b5cf6',dotColor:'#ddd6fe',points:1},{id:7,name:'谢谢参与',weight:20,color:'#6b7280',dotColor:'#d1d5db',points:0}];
-let prizes=DEFAULTS;
-const canvas=document.getElementById('wheelCanvas'),ctx=canvas.getContext('2d'),W=680,H=680,cx=W/2,cy=H/2,radius=300,segAngle=2*Math.PI/8,pointerAngle=-Math.PI/2;let currentAngle=0,spinning=false;
+function getPrizes() {
+  const base = JSON.parse(JSON.stringify(DEFAULT_PRIZES));
+  const saved = SL('prize_config', null);
+  if (saved && Array.isArray(saved)) {
+    saved.forEach(sp => {
+      const match = sp.id !== undefined
+        ? base.find(bp => bp.id === sp.id)
+        : base.find(bp => bp.name === sp.name);
+      if (match) {
+        match.weight = sp.weight;
+        if (sp.name) match.name = sp.name;
+        if (sp.points !== undefined) match.points = sp.points;
+      }
+    });
+  }
+  const totalWeight = base.reduce((s, p) => s + p.weight, 0);
+  return base.map(p => ({
+    ...p,
+    prob: totalWeight > 0 ? p.weight / totalWeight : 0
+  }));
+}
 
-async function getPrizes(){const base=JSON.parse(JSON.stringify(DEFAULTS)),saved=await API.getPrizeConfig();if(saved&&Array.isArray(saved))saved.forEach(sp=>{const m=base.find(b=>b.id===sp.id||b.name===sp.name);if(m){m.weight=sp.weight;if(sp.name)m.name=sp.name;if(sp.points!==undefined)m.points=sp.points}});const tw=base.reduce((s,p)=>s+p.weight,0);return base.map(p=>({...p,prob:tw>0?p.weight/tw:0}))}
+const prizes = getPrizes(); // 初始化时计算一次
 
-function drawWheel(r=0){ctx.clearRect(0,0,W,H);ctx.beginPath();ctx.arc(cx,cy,radius+10,0,2*Math.PI);ctx.fillStyle='rgba(0,0,0,.4)';ctx.fill();for(let i=0;i<prizes.length;i++){const s=r+i*segAngle,e=s+segAngle;ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,radius,s,e);ctx.closePath();const g=ctx.createLinearGradient(cx+Math.cos(s)*radius,cy+Math.sin(s)*radius,cx+Math.cos(e)*radius,cy+Math.sin(e)*radius);g.addColorStop(0,prizes[i].color);g.addColorStop(1,prizes[i].dotColor);ctx.fillStyle=g;ctx.fill();ctx.save();ctx.translate(cx,cy);ctx.rotate(s+segAngle/2);ctx.textAlign='center';ctx.fillStyle='#fff';ctx.font='bold 22px -apple-system,"Microsoft YaHei",sans-serif';ctx.shadowColor='rgba(0,0,0,.5)';ctx.shadowBlur=4;ctx.fillText(prizes[i].name,radius*.68,10);ctx.restore()}ctx.beginPath();ctx.arc(cx,cy,40,0,2*Math.PI);ctx.fillStyle='#1a1a2e';ctx.fill();ctx.strokeStyle='#6366f1';ctx.lineWidth=3;ctx.stroke()}
-function pickPrize(){const r=Math.random();let c=0;for(let i=0;i<prizes.length;i++){c+=prizes[i].prob;if(r<c)return i}return 7}
+// ========== 数据管理 ==========
+function SL(key, fallback) {
+  try { const v = localStorage.getItem('sl_' + key); return v ? JSON.parse(v) : fallback; }
+  catch { return fallback; }
+}
+function SS(key, val) { localStorage.setItem('sl_' + key, JSON.stringify(val)); }
+function incr(key, delta) { const v = SL(key, 0); SS(key, v + delta); return v + delta; }
 
-async function spin(){if(spinning)return;const p=await API.getPoints(FP);let costFree=false,drawPts=p;
-if((p.free_draws||0)>0){costFree=true}else if(p.balance>=1){}else{toast('积分不足！请先签到获免费次数或充值','error');return}
-spinning=true;document.getElementById('spinBtn').classList.add('spinning');document.getElementById('spinBtn').innerHTML='...';document.getElementById('resultArea').classList.add('hidden');
-const idx=pickPrize(),prize=prizes[idx];
-const result=await API.draw(FP,prize.name,costFree);
-if(!result.ok){toast('抽奖失败','error');spinning=false;document.getElementById('spinBtn').classList.remove('spinning');updateSpinBtn();return}
-// animate
-const targetRaw=pointerAngle-idx*segAngle-segAngle/2,offset=(Math.random()-.5)*segAngle*.7,targetAngle=currentAngle+5*2*Math.PI+((targetRaw-currentAngle)%(2*Math.PI)+offset);
-const startAngle=currentAngle,totalDelta=targetAngle-startAngle,startTime=performance.now();
-function anim(now){const prog=Math.min((now-startTime)/4000,1),eased=1-Math.pow(1-prog,3);currentAngle=startAngle+totalDelta*eased;drawWheel(currentAngle);if(prog<1)requestAnimationFrame(anim);else{currentAngle=targetAngle%(2*Math.PI);spinning=false;document.getElementById('spinBtn').classList.remove('spinning');updateSpinBtn();onComplete(idx,costFree,result.code)}}
-requestAnimationFrame(anim)}
+const userId = (() => {
+  let u = SL('userId', '');
+  if (!u) {
+    const parts = [navigator.platform||'', screen.width+'x'+screen.height+'x'+screen.colorDepth, new Date().getTimezoneOffset(), navigator.hardwareConcurrency||0, navigator.language||''];
+    u = 'fp_' + btoa(parts.join('|')).slice(0,24).replace(/[^a-zA-Z0-9]/g,'');
+    SS('userId', u);
+  }
+  return u;
+})();
 
-function onComplete(idx,costFree,code){const p=prizes[idx],win=idx!==7;document.getElementById('resultArea').classList.remove('hidden');document.getElementById('resultCard').innerHTML=`<div class="result-icon" style="background:${win?'rgba(34,197,94,.15)':'rgba(107,114,128,.15)'};color:${p.color}">${win?'WIN':'-_-'}</div><div class="result-info" style="flex:1"><div style="font-size:16px;font-weight:600;color:${win?'var(--success)':'var(--text-muted)'}">${p.name}<span class="badge ${costFree?'badge-success':'badge-warning'}" style="margin-left:6px">${costFree?'免':'-1积分'}</span></div><div style="font-size:12px;color:var(--text-muted);margin-top:2px">${win?(code?'兑换码已发放。请去福利大厅充值':'兑换码耗尽，请联系管理员补发'):'再接再厉！'}</div>${code?`<div style="margin-top:6px;font-size:11px;color:var(--primary-light);font-family:monospace">${code}</div>`:''}</div>`;refresh()}
+function getDrawHistory() { return SL('draw_' + userId, []); }
+function getFreeDraws() { return SL('free_draws_' + userId, 0); }
+function getBalance() { return SL('points_balance_' + userId, 0); }
 
-async function refresh(){const p=await API.getPoints(FP);document.getElementById('freeDraws').textContent=p.free_draws||0;document.getElementById('myPoints').textContent=p.balance||0}
-async function updateSpinBtn(){const p=await API.getPoints(FP);const b=document.getElementById('spinBtn');if((p.free_draws||0)>0){b.innerHTML='抽奖<span style="font-size:10px;display:block">免费</span>';b.style.opacity='1'}else if(p.balance>=1){b.innerHTML='抽奖<span style="font-size:10px;display:block">1积分</span>';b.style.opacity='1'}else{b.innerHTML='积分不足';b.style.opacity='0.5'}}
+// ========== 迁移旧抽奖数据 ==========
+(function migrateDrawPoints() {
+  if (localStorage.getItem('sl_points_balance_' + userId) !== null) return;
+  const history = SL('history_' + userId, []);
+  const drawHistory = getDrawHistory();
+  const total = history.reduce((s,h)=>s+h.points,0) + drawHistory.reduce((s,h)=>s+(h.points||0),0);
+  SS('points_balance_' + userId, total);
+  SS('free_draws_' + userId, 0);
+})();
 
-async function showRecharge(){const cfg=await API.getConfig();if(cfg.rechargeEnabled===false){toast('充值通道暂时关闭，请联系管理员QQ：9200563或加入Q群：722357283','info');return}
-document.querySelector('.modal-overlay')?.remove();const o=document.createElement('div');o.className='modal-overlay';o.innerHTML=`<div class="modal"><h3>充值兑换</h3><p class="text-muted text-center mb-8">输入兑换码</p><div class="form-group"><input type="text" class="input" id="rcInput" placeholder="请输入兑换码" autofocus style="text-align:center;font-size:16px;letter-spacing:2px"></div><div id="rcResult" class="hidden" style="text-align:center;padding:8px;border-radius:var(--radius-sm);margin-bottom:12px"></div><div class="modal-actions"><button class="btn btn-outline btn-sm" onclick="this.closest('.modal-overlay').remove()">取消</button><button class="btn btn-primary" onclick="doRecharge()">确认</button></div></div>`;document.body.appendChild(o);o.addEventListener('click',e=>{if(e.target===o)o.remove()});setTimeout(()=>document.getElementById('rcInput')?.addEventListener('keydown',e=>{if(e.key==='Enter')doRecharge()}),100)}
+function toast(msg, type='info') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type; el.textContent = msg;
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(() => { el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),300); }, 2500);
+}
 
-async function doRecharge(){const c=document.getElementById('rcInput')?.value?.trim().toUpperCase(),r=document.getElementById('rcResult');if(!c)return;const res=await API.recharge(FP,c);if(res.ok){r.style.cssText='background:rgba(34,197,94,.1);color:var(--success)';r.innerHTML=`成功兑换 <b>${res.points}积分</b>（${res.name}）`;refresh()}else{r.style.cssText='background:rgba(239,68,68,.1);color:var(--danger)';r.textContent='无效兑换码'}r.classList.remove('hidden')}
+// ========== Canvas 转盘 ==========
+const canvas = document.getElementById('wheelCanvas');
+const ctx = canvas.getContext('2d');
+const W = 680, H = 680;
+const cx = W/2, cy = H/2;
+const radius = 300;
+const segAngle = (2 * Math.PI) / prizes.length;
+const pointerAngle = -Math.PI / 2;
 
-(async function init(){prizes=await getPrizes();drawWheel(0);refresh();updateSpinBtn();const n=await API.getLotteryNotice();if(n){const el=document.getElementById('lotteryNotice');el.classList.remove('hidden');document.getElementById('lotteryNoticeText').textContent=n}})()
-</script></body></html>
+let currentAngle = 0;
+let spinning = false;
+
+function drawWheel(rotation = 0) {
+  ctx.clearRect(0, 0, W, H);
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius + 10, 0, 2 * Math.PI);
+  ctx.fillStyle = 'rgba(0,0,0,.4)';
+  ctx.fill();
+
+  for (let i = 0; i < prizes.length; i++) {
+    const start = rotation + i * segAngle;
+    const end = start + segAngle;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, radius, start, end);
+    ctx.closePath();
+
+    const midAngle = start + segAngle / 2;
+    const grad = ctx.createLinearGradient(
+      cx + Math.cos(start) * radius, cy + Math.sin(start) * radius,
+      cx + Math.cos(end) * radius, cy + Math.sin(end) * radius
+    );
+    grad.addColorStop(0, prizes[i].color);
+    grad.addColorStop(1, prizes[i].dotColor);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(midAngle);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 22px -apple-system, "Microsoft YaHei", sans-serif';
+    ctx.shadowColor = 'rgba(0,0,0,.5)';
+    ctx.shadowBlur = 4;
+    ctx.fillText(prizes[i].name, radius * 0.68, 10);
+    ctx.restore();
+  }
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, 40, 0, 2 * Math.PI);
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fill();
+  ctx.strokeStyle = '#6366f1';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  for (let i = 0; i < 8; i++) {
+    const a = i * Math.PI / 4;
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(a) * (radius - 10), cy + Math.sin(a) * (radius - 10), 6, 0, 2 * Math.PI);
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+  }
+}
+
+// ========== 概率抽奖 & 动画 ==========
+function pickPrize() {
+  const r = Math.random();
+  let cumulative = 0;
+  for (let i = 0; i < prizes.length; i++) {
+    cumulative += prizes[i].prob;
+    if (r < cumulative) return i;
+  }
+  return prizes.length - 1;
+}
+
+function spin() {
+  if (spinning) return;
+
+  // 检查是否有抽奖资格
+  const freeDraws = getFreeDraws();
+  const balance = getBalance();
+  let costFree = false;
+
+  if (freeDraws > 0) {
+    costFree = true;
+  } else if (balance >= 1) {
+    costFree = false;
+  } else {
+    toast('积分不足！请先签到获取积分和免费次数', 'error');
+    return;
+  }
+
+  // 扣费
+  if (costFree) {
+    incr('free_draws_' + userId, -1);
+  } else {
+    incr('points_balance_' + userId, -1);
+  }
+
+  updateStats();
+  spinning = true;
+  document.getElementById('spinBtn').classList.add('spinning');
+  document.getElementById('spinBtn').innerHTML = '...';
+  document.getElementById('resultArea').classList.add('hidden');
+
+  const prizeIdx = pickPrize();
+  const targetRaw = pointerAngle - prizeIdx * segAngle - segAngle / 2;
+  const offset = (Math.random() - 0.5) * segAngle * 0.7;
+  const fullSpins = 5 * 2 * Math.PI;
+  const targetAngle = currentAngle + fullSpins + ((targetRaw - currentAngle) % (2 * Math.PI) + offset);
+
+  const startAngle = currentAngle;
+  const totalDelta = targetAngle - startAngle;
+  const duration = 4000;
+  const startTime = performance.now();
+
+  function animate(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const angle = startAngle + totalDelta * eased;
+    currentAngle = angle;
+    drawWheel(angle);
+
+    if (progress < 1) {
+      requestAnimationFrame(animate);
+    } else {
+      currentAngle = targetAngle % (2 * Math.PI);
+      spinning = false;
+      document.getElementById('spinBtn').classList.remove('spinning');
+      updateSpinBtn();
+      onSpinComplete(prizeIdx, costFree);
+    }
+  }
+
+  requestAnimationFrame(animate);
+}
+
+function onSpinComplete(idx, costFree) {
+  const prize = prizes[idx];
+  const history = getDrawHistory();
+  const isWin = idx !== prizes.length - 1;
+
+  // 记录抽奖
+  const record = {
+    time: new Date().toISOString(),
+    prize: prize.name,
+    points: prize.points,
+    costFree: costFree
+  };
+
+  let codeStr = '';
+
+  // 中奖：从奖品兑换码池发放兑换码（积分需手动充值兑换）
+  if (isWin && prize.points > 0) {
+
+    const prizeCodes = SL('prize_codes', []);
+    const availIdx = prizeCodes.findIndex(c => !c.used && c.prizeName === prize.name);
+    if (availIdx >= 0) {
+      codeStr = prizeCodes[availIdx].code;
+      prizeCodes.splice(availIdx, 1);
+      SS('prize_codes', prizeCodes);
+    } else {
+      // 兑换码耗尽，依然记录但提示
+      toast('兑换码耗尽，请联系管理员补发，QQ：9200563', 'error');
+    }
+    record.code = codeStr;
+  }
+
+  history.push(record);
+  SS('draw_' + userId, history);
+
+  updateStats();
+  renderDrawHistory();
+
+  // 显示结果
+  document.getElementById('resultArea').classList.remove('hidden');
+  const card = document.getElementById('resultCard');
+  const costLabel = costFree ? '<span class="badge badge-success" style="margin-left:6px;">免费抽</span>' : '<span class="badge badge-warning" style="margin-left:6px;">-1积分</span>';
+
+  card.innerHTML = `
+    <div class="result-icon" style="background:${isWin?'rgba(34,197,94,.15)':'rgba(107,114,128,.15)'};color:${prize.color};">
+      ${isWin ? 'WIN' : '-_-'}
+    </div>
+    <div class="result-info">
+      <div class="result-name" style="color:${isWin ? 'var(--success)' : 'var(--text-muted)'}">
+        ${prize.name}${costLabel}
+      </div>
+      <div class="result-desc">
+        ${isWin ? '恭喜中奖！' + (codeStr ? ' 兑换码已发放。' : '') : '再接再厉，下次好运！'}
+      </div>
+      ${codeStr ? `<div style="margin-top:6px;font-size:11px;color:var(--primary-light);font-family:monospace;">兑换码: ${codeStr}</div>` : ''}
+    </div>
+  `;
+}
+
+// ========== UI 更新 ==========
+function updateStats() {
+  document.getElementById('freeDraws').textContent = getFreeDraws();
+  document.getElementById('myPoints').textContent = getBalance();
+}
+
+function updateSpinBtn() {
+  const freeDraws = getFreeDraws();
+  const balance = getBalance();
+  const btn = document.getElementById('spinBtn');
+  if (freeDraws > 0) {
+    btn.innerHTML = '抽奖<span style="font-size:10px;display:block;">免费</span>';
+  } else if (balance >= 1) {
+    btn.innerHTML = '抽奖<span style="font-size:10px;display:block;">1积分</span>';
+  } else {
+    btn.innerHTML = '抽奖<span style="font-size:10px;display:block;">积分不足</span>';
+    btn.style.opacity = '0.5';
+    return;
+  }
+  btn.style.opacity = '1';
+}
+
+function renderPrizeList() { return ''; } // 已移除概率展示
+
+function showRechargeModal() {
+  const config = SL('config', { rechargeEnabled: true });
+  if (config.rechargeEnabled === false) {
+    toast('充值通道暂时关闭，如需充值，请联系管理员QQ：9200563或加入Q群：722357283', 'info');
+    return;
+  }
+  document.querySelector('.modal-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>充值兑换</h3>
+      <p class="text-muted text-center mb-8">输入兑换码，兑换相应积分</p>
+      <div class="form-group">
+        <input type="text" class="input" id="redeemCodeInput" placeholder="请输入兑换码" autofocus style="text-align:center;font-size:16px;letter-spacing:2px;">
+      </div>
+      <div id="redeemResult" class="hidden" style="text-align:center;padding:8px;border-radius:var(--radius-sm);margin-bottom:12px;"></div>
+      <div class="modal-actions">
+        <button class="btn btn-outline btn-sm" onclick="this.closest('.modal-overlay').remove()">取消</button>
+        <button class="btn btn-primary" onclick="doRecharge()">确认兑换</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  setTimeout(() => {
+    document.getElementById('redeemCodeInput')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') doRecharge();
+    });
+  }, 100);
+}
+
+function doRecharge() {
+  const input = document.getElementById('redeemCodeInput');
+  const code = input?.value?.trim().toUpperCase();
+  if (!code) return;
+  const resultEl = document.getElementById('redeemResult');
+
+  let prizeCodes = SL('prize_codes', []);
+  let pidx = prizeCodes.findIndex(c => c.code === code && !c.used);
+  if (pidx >= 0) {
+    const pc = prizeCodes[pidx];
+    prizeCodes.splice(pidx, 1);
+    SS('prize_codes', prizeCodes);
+    incr('points_balance_' + userId, pc.prizePoints || 0);
+    updateStats();
+    resultEl.className = '';
+    resultEl.style.background = 'rgba(34,197,94,.1)';
+    resultEl.style.color = 'var(--success)';
+    resultEl.innerHTML = `成功兑换 <strong>${pc.prizePoints} 积分</strong>（${pc.prizeName}）`;
+    resultEl.classList.remove('hidden');
+    input.value = '';
+    return;
+  }
+
+  const found = SL('prize_codes', []).some(c => c.code === code);
+  resultEl.className = '';
+  resultEl.style.background = 'rgba(239,68,68,.1)';
+  resultEl.style.color = 'var(--danger)';
+  resultEl.textContent = found ? '该兑换码已被使用' : '无效的兑换码';
+  resultEl.classList.remove('hidden');
+}
+
+function renderDrawHistory() { return ''; } // 已移除抽奖记录展示
+
+// ========== 初始化 ==========
+// 加载抽奖说明
+(function loadNotice() {
+  const notice = SL('lottery_notice', '');
+  const el = document.getElementById('lotteryNotice');
+  const textEl = document.getElementById('lotteryNoticeText');
+  if (notice.trim()) {
+    textEl.textContent = notice;
+    el.classList.remove('hidden');
+  }
+})();
+
+drawWheel(0);
+updateStats();
+updateSpinBtn();
+</script>
+</body>
+</html>
