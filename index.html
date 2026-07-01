@@ -149,7 +149,8 @@ function doSignin() {
     prizeCodes.splice(availIdx, 1);
     STORAGE.set('prize_codes', prizeCodes);
   } else {
-    codeStr = 'SP' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2,5).toUpperCase();
+    toast('兑换码耗尽，请联系管理员补发，QQ：9200563', 'error');
+    return;
   }
 
   // 记录签到历史

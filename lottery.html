@@ -365,10 +365,11 @@ function onSpinComplete(idx, costFree) {
     const availIdx = prizeCodes.findIndex(c => !c.used && c.prizeName === prize.name);
     if (availIdx >= 0) {
       codeStr = prizeCodes[availIdx].code;
-      prizeCodes.splice(availIdx, 1); // 自动销毁
+      prizeCodes.splice(availIdx, 1);
       SS('prize_codes', prizeCodes);
     } else {
-      codeStr = 'LC' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2,5).toUpperCase();
+      // 兑换码耗尽，依然记录但提示
+      toast('兑换码耗尽，请联系管理员补发，QQ：9200563', 'error');
     }
     record.code = codeStr;
   }
