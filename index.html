@@ -88,29 +88,46 @@ const STORAGE = {
   incr(key, delta) { const v = this.get(key, 0); this.set(key, v + delta); return v + delta; }
 };
 
-function ensureUserId() {
-  let uid = STORAGE.get('userId', '');
-  if (!uid) { uid = 'u_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6); STORAGE.set('userId', uid); }
-  return uid;
+// ========== 设备指纹 ==========
+function getFingerprint() {
+  const parts = [
+    navigator.platform || '',
+    screen.width + 'x' + screen.height + 'x' + screen.colorDepth,
+    new Date().getTimezoneOffset(),
+    navigator.hardwareConcurrency || 0,
+    navigator.language || ''
+  ];
+  return 'fp_' + btoa(parts.join('|')).slice(0, 24).replace(/[^a-zA-Z0-9]/g,'');
 }
-const userId = ensureUserId();
+
+const fingerprint = getFingerprint();
+
+// 合并旧 userId 记录到新指纹
+(function migrateFingerprint() {
+  const oldUid = STORAGE.get('userId', '');
+  if (oldUid && oldUid !== fingerprint) {
+    // 迁移免费次数和积分余额
+    const oldBalance = STORAGE.get('points_balance_' + oldUid, 0);
+    const oldDraws = STORAGE.get('free_draws_' + oldUid, 0);
+    if (oldBalance > 0) STORAGE.set('points_balance_' + fingerprint, (STORAGE.get('points_balance_' + fingerprint, 0) || 0) + oldBalance);
+    if (oldDraws > 0) STORAGE.set('free_draws_' + fingerprint, (STORAGE.get('free_draws_' + fingerprint, 0) || 0) + oldDraws);
+    STORAGE.set('userId', fingerprint);
+  }
+})();
+
+const userId = fingerprint;
 
 function getConfig() { return STORAGE.get('config', { signinPoints: 5, adminPassword: 'admin123' }); }
 function getHistory() { return STORAGE.get('history_' + userId, []); }
 
 // ========== 积分余额 & 免费次数迁移 ==========
 (function migrateIfNeeded() {
-  // 如果已有 balance 字段说明已迁移
   if (localStorage.getItem('sl_points_balance_' + userId) !== null) return;
-
-  // 从旧数据计算初始余额
   const history = getHistory();
   const drawHistory = STORAGE.get('draw_' + userId, []);
   const total = history.reduce((s, h) => s + h.points, 0)
              + drawHistory.reduce((s, h) => s + (h.points || 0), 0);
   STORAGE.set('points_balance_' + userId, total);
-
-  // 免费次数从 0 开始（旧数据没有免费次数概念）
   STORAGE.set('free_draws_' + userId, 0);
 })();
 

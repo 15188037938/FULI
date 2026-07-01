@@ -178,7 +178,11 @@ function incr(key, delta) { const v = SL(key, 0); SS(key, v + delta); return v +
 
 const userId = (() => {
   let u = SL('userId', '');
-  if (!u) { u = 'u_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6); SS('userId', u); }
+  if (!u) {
+    const parts = [navigator.platform||'', screen.width+'x'+screen.height+'x'+screen.colorDepth, new Date().getTimezoneOffset(), navigator.hardwareConcurrency||0, navigator.language||''];
+    u = 'fp_' + btoa(parts.join('|')).slice(0,24).replace(/[^a-zA-Z0-9]/g,'');
+    SS('userId', u);
+  }
   return u;
 })();
 
