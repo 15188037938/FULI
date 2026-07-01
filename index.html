@@ -62,15 +62,12 @@
   </div>
 
   <!-- 自定义链接 -->
-  <div class="card mt-16" id="customLinksCard">
-    <div class="card-title">
-      <span class="icon blue">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-      </span>
-      快捷入口
-    </div>
-    <div id="customLinksList" class="flex flex-wrap gap-8">
-      <p class="text-muted">暂无快捷入口</p>
+  <div id="customLinksCard" style="position:fixed;top:16px;right:16px;z-index:50;max-width:300px;">
+    <div class="card" style="padding:12px 14px;margin:0;">
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:var(--primary-light);">快捷入口</div>
+      <div id="customLinksList" class="flex flex-wrap gap-6">
+        <p class="text-muted" style="font-size:12px;">暂无快捷入口</p>
+      </div>
     </div>
   </div>
 
@@ -157,8 +154,6 @@ function doSignin() {
   history.push({ date: today, time: new Date().toISOString(), points: codePoints, code: codeStr });
   STORAGE.set('history_' + userId, history);
 
-  // 增加积分余额
-  STORAGE.incr('points_balance_' + userId, codePoints);
   // 每日签到送 1 次免费抽奖
   STORAGE.incr('free_draws_' + userId, 1);
 
@@ -309,7 +304,7 @@ function renderCustomLinks() {
   }
   if (card) card.classList.remove('hidden');
   container.innerHTML = links.map(l => `
-    <a href="${l.url}" target="_blank" class="btn btn-outline btn-sm" style="text-decoration:none;">${l.name}</a>
+    <a href="${l.url}" target="_blank" class="btn btn-outline btn-sm" style="text-decoration:none;padding:4px 10px;font-size:12px;">${l.name}</a>
   `).join('');
 }
 
