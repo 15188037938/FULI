@@ -1,7 +1,7 @@
 // Supabase 数据库接口层
 // 使用前将下方 SUPABASE_URL 和 SUPABASE_KEY 替换为你的实际值
-const SUPABASE_URL = 'https://xxxxxxxxxxxx.supabase.co';
-const SUPABASE_KEY = 'eyJhbGci...你的anon_key';
+const SUPABASE_URL = 'https://cugtmixaeyxjkscbpjsz.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_jQHreW13s_01H8rJUruuGQ_l_j-CQFr';
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
