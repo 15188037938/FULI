@@ -61,6 +61,19 @@
     </div>
   </div>
 
+  <!-- 自定义链接 -->
+  <div class="card mt-16" id="customLinksCard">
+    <div class="card-title">
+      <span class="icon blue">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      </span>
+      快捷入口
+    </div>
+    <div id="customLinksList" class="flex flex-wrap gap-8">
+      <p class="text-muted">暂无快捷入口</p>
+    </div>
+  </div>
+
 </div>
 
 <div style="text-align:center;padding:0 0 40px;">
@@ -284,10 +297,26 @@ function updateSigninCard() {
   }
 }
 
+// ========== 自定义链接渲染 ==========
+function renderCustomLinks() {
+  const links = STORAGE.get('custom_links', []);
+  const container = document.getElementById('customLinksList');
+  const card = document.getElementById('customLinksCard');
+  if (links.length === 0) {
+    if (card) card.classList.add('hidden');
+    return;
+  }
+  if (card) card.classList.remove('hidden');
+  container.innerHTML = links.map(l => `
+    <a href="${l.url}" target="_blank" class="btn btn-outline btn-sm" style="text-decoration:none;">${l.name}</a>
+  `).join('');
+}
+
 // ========== 初始化 ==========
 updateStats();
 renderHistory();
 updateSigninCard();
+renderCustomLinks();
 </script>
 </body>
 </html>

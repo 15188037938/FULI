@@ -320,6 +320,32 @@ function renderAdmin() {
         <div id="prizeCodesList">${renderPrizeCodesList()}</div>
       </div>
 
+      <!-- 自定义链接 -->
+      <div class="card">
+        <div class="card-title">
+          <span class="icon blue">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          </span>
+          自定义链接
+        </div>
+        <div class="flex gap-8" style="align-items:flex-end;">
+          <div class="form-group" style="margin-bottom:0;flex:1;">
+            <label>按钮名称</label>
+            <input type="text" class="input" id="linkName" placeholder="按钮显示名称">
+          </div>
+          <div class="form-group" style="margin-bottom:0;flex:2;">
+            <label>链接地址</label>
+            <input type="text" class="input" id="linkUrl" placeholder="https://...">
+          </div>
+          <button class="btn btn-primary" onclick="addCustomLink()">添加</button>
+        </div>
+        <div class="section-title mt-20">
+          链接列表
+          <span class="text-muted" style="font-weight:400;margin-left:8px;" id="linksCount">${renderLinksCount()}</span>
+        </div>
+        <div id="linksList">${renderLinksList()}</div>
+      </div>
+
       </div><!-- /admin-grid -->
 
       <a href="index.html" class="btn btn-outline btn-sm back-btn" style="text-decoration:none;" title="返回首页">
@@ -549,6 +575,49 @@ function deletePrizeCode(codeStr) {
   const idx = codes.findIndex(c => c.code === codeStr);
   if (idx >= 0) codes.splice(idx, 1);
   SS('prize_codes', codes);
+  toast('已删除', 'info');
+  render();
+}
+
+// ========== 自定义链接管理 ==========
+function getCustomLinks() { return SL('custom_links', []); }
+
+function renderLinksCount() {
+  const links = getCustomLinks();
+  return `共 ${links.length} 个`;
+}
+
+function renderLinksList() {
+  const links = getCustomLinks();
+  if (links.length === 0) {
+    return `<div class="empty-state"><p>暂无自定义链接</p></div>`;
+  }
+  return links.map((l, i) => `
+    <div class="code-list-item">
+      <span style="font-size:13px;font-weight:500;">${l.name}</span>
+      <span style="font-size:12px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;">${l.url}</span>
+      <button class="btn btn-danger btn-sm" onclick="deleteCustomLink(${i})" style="padding:3px 8px;font-size:11px;min-width:auto;">删</button>
+    </div>
+  `).join('');
+}
+
+function addCustomLink() {
+  const name = document.getElementById('linkName')?.value?.trim();
+  const url = document.getElementById('linkUrl')?.value?.trim();
+  if (!name || !url) { toast('请填写名称和链接', 'error'); return; }
+  const links = getCustomLinks();
+  links.push({ name, url });
+  SS('custom_links', links);
+  document.getElementById('linkName').value = '';
+  document.getElementById('linkUrl').value = '';
+  toast(`已添加链接: ${name}`, 'success');
+  render();
+}
+
+function deleteCustomLink(idx) {
+  const links = getCustomLinks();
+  links.splice(idx, 1);
+  SS('custom_links', links);
   toast('已删除', 'info');
   render();
 }
