@@ -1,7 +1,7 @@
 // Supabase 数据库接口层
 // 使用前将下方 SUPABASE_URL 和 SUPABASE_KEY 替换为你的实际值
 const SUPABASE_URL = 'https://cugtmixaeyxjkscbpjsz.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_jQHreW13s_01H8rJUruuGQ_l_j-CQFr';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1Z3RtaXhhZXl4amtzY2JwanN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5MTU4MjgsImV4cCI6MjA5ODQ5MTgyOH0.lz-SSvu2YoHr61V2jrkPOTI5mH29docQrNRMo67xfkc';
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
