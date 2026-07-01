@@ -321,6 +321,15 @@ tr:hover td { background:rgba(99,102,241,.03); }
 .items-center { align-items:center; }
 .hidden { display:none !important; }
 
+/* ========== 首页宽版布局 ========== */
+.container.home-view { max-width: 720px; padding: 24px 24px 40px; }
+.container.home-view .header { margin-bottom: 20px; }
+.container.home-view .header h1 { font-size: 24px; }
+.container.home-view .card { padding: 18px 20px; margin-bottom: 12px; }
+.container.home-view .nav-card { padding: 24px 12px; }
+.container.home-view .stats-row { gap: 8px; }
+.container.home-view .stat-item { padding: 12px; }
+
 /* ========== 固定返回按钮 ========== */
 .back-btn {
   position:fixed; top:16px; left:16px; z-index:100;
