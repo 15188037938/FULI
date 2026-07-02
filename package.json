@@ -1,0 +1,11 @@
+{
+  "name": "fuli-lac",
+  "version": "2.0.0",
+  "description": "福利大厅 - 签到抽奖系统（Vercel Postgres + Vercel）",
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "@vercel/postgres": "^0.10.0"
+  }
+}

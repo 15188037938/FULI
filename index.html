@@ -20,13 +20,13 @@
   <div class="card" style="text-align:center;">
     <div class="stats-row" style="margin-bottom:0;">
       <div class="stat-item" style="border:none;">
-        <div class="stat-value" style="color:var(--warning);" id="freeDraws">0</div>
+        <div class="stat-value" style="color:var(--warning);" id="freeDraws">-</div>
         <div class="stat-label">免费抽奖次数</div>
       </div>
     </div>
     <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
-      签到状态：<span id="signinStatus" style="font-size:11px;padding:1px 8px;border-radius:10px;">未签到</span>
-      &middot; 累计签到 <span id="signCount" style="color:var(--text);font-weight:600;">0</span> 天
+      签到状态：<span id="signinStatus" style="font-size:11px;padding:1px 8px;border-radius:10px;">加载中...</span>
+      &middot; 累计签到 <span id="signCount" style="color:var(--text);font-weight:600;">-</span> 天
     </div>
   </div>
 
@@ -57,7 +57,7 @@
       签到记录
     </div>
     <div id="historyList" style="max-height:200px;overflow-y:auto;">
-      <p class="text-muted text-center">暂无签到记录</p>
+      <p class="text-muted text-center">加载中...</p>
     </div>
   </div>
 
@@ -77,17 +77,8 @@
   <a href="admin.html" class="btn btn-outline btn-sm">管理员入口</a>
 </div>
 
+<script src="api-client.js"></script>
 <script>
-// ========== 数据管理 ==========
-const STORAGE = {
-  get(key, fallback) {
-    try { const v = localStorage.getItem('sl_' + key); return v ? JSON.parse(v) : fallback; }
-    catch { return fallback; }
-  },
-  set(key, val) { localStorage.setItem('sl_' + key, JSON.stringify(val)); },
-  incr(key, delta) { const v = this.get(key, 0); this.set(key, v + delta); return v + delta; }
-};
-
 // ========== 设备指纹 ==========
 function getFingerprint() {
   const parts = [
@@ -100,36 +91,7 @@ function getFingerprint() {
   return 'fp_' + btoa(parts.join('|')).slice(0, 24).replace(/[^a-zA-Z0-9]/g,'');
 }
 
-const fingerprint = getFingerprint();
-
-// 合并旧 userId 记录到新指纹
-(function migrateFingerprint() {
-  const oldUid = STORAGE.get('userId', '');
-  if (oldUid && oldUid !== fingerprint) {
-    // 迁移免费次数和积分余额
-    const oldBalance = STORAGE.get('points_balance_' + oldUid, 0);
-    const oldDraws = STORAGE.get('free_draws_' + oldUid, 0);
-    if (oldBalance > 0) STORAGE.set('points_balance_' + fingerprint, (STORAGE.get('points_balance_' + fingerprint, 0) || 0) + oldBalance);
-    if (oldDraws > 0) STORAGE.set('free_draws_' + fingerprint, (STORAGE.get('free_draws_' + fingerprint, 0) || 0) + oldDraws);
-    STORAGE.set('userId', fingerprint);
-  }
-})();
-
-const userId = fingerprint;
-
-function getConfig() { return STORAGE.get('config', { signinPoints: 5, adminPassword: 'admin123' }); }
-function getHistory() { return STORAGE.get('history_' + userId, []); }
-
-// ========== 积分余额 & 免费次数迁移 ==========
-(function migrateIfNeeded() {
-  if (localStorage.getItem('sl_points_balance_' + userId) !== null) return;
-  const history = getHistory();
-  const drawHistory = STORAGE.get('draw_' + userId, []);
-  const total = history.reduce((s, h) => s + h.points, 0)
-             + drawHistory.reduce((s, h) => s + (h.points || 0), 0);
-  STORAGE.set('points_balance_' + userId, total);
-  STORAGE.set('free_draws_' + userId, 0);
-})();
+const userId = getFingerprint();
 
 // ========== UI 工具 ==========
 function toast(msg, type='info') {
@@ -142,194 +104,111 @@ function toast(msg, type='info') {
 function todayStr() { return new Date().toISOString().slice(0,10); }
 
 // ========== 签到逻辑 ==========
-function doSignin() {
-  const config = getConfig();
-  const history = getHistory();
-  const today = todayStr();
+async function doSignin() {
+  const btn = document.getElementById('signinCard');
+  if (btn.classList.contains('loading')) return;
+  btn.classList.add('loading');
+  btn.style.opacity = '0.6';
 
-  if (history.some(h => h.date === today)) {
-    toast('今天已经签到过了', 'info');
-    return;
+  try {
+    const result = await API.signin(userId);
+    toast(`签到成功！+${result.earnedPoints} 积分 + 免费抽奖`, 'success');
+    await loadData();
+  } catch (e) {
+    toast(e.message || '签到失败', 'error');
+  } finally {
+    btn.classList.remove('loading');
+    btn.style.opacity = '';
   }
-
-  // 从奖品兑换码池取"1积分"的码
-  const prizeCodes = STORAGE.get('prize_codes', []);
-  const availIdx = prizeCodes.findIndex(c => !c.used && c.prizeName === '1积分');
-  let codeStr = '';
-  const codePoints = config.signinPoints;
-
-  if (availIdx >= 0) {
-    codeStr = prizeCodes[availIdx].code;
-    prizeCodes.splice(availIdx, 1);
-    STORAGE.set('prize_codes', prizeCodes);
-  } else {
-    toast('兑换码耗尽，请联系管理员补发，QQ：9200563', 'error');
-    return;
-  }
-
-  // 记录签到历史
-  history.push({ date: today, time: new Date().toISOString(), points: codePoints, code: codeStr });
-  STORAGE.set('history_' + userId, history);
-
-  // 每日签到送 1 次免费抽奖
-  STORAGE.incr('free_draws_' + userId, 1);
-
-  updateStats();
-  renderHistory();
-  updateSigninCard();
-
-  showCodeModal(codeStr, codePoints);
-}
-
-function showCodeModal(code, points) {
-  document.querySelector('.modal-overlay')?.remove();
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay';
-  overlay.innerHTML = `
-    <div class="modal">
-      <h3>签到成功</h3>
-      <div class="code-display">
-        <div class="code-text">${code}</div>
-        <div class="code-meta">面值 ${points} 积分</div>
-      </div>
-      <p class="text-muted text-center" style="margin-top:8px;">兑换码已发放 + 免费抽奖次数 +1</p>
-      <div class="modal-actions">
-        <button class="btn btn-primary" onclick="this.closest('.modal-overlay').remove()">知道了</button>
-        <button class="btn btn-outline btn-sm" onclick="copyCode('${code}')">复制兑换码</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-}
-
-function copyCode(code) {
-  navigator.clipboard.writeText(code).then(() => toast('已复制兑换码', 'success'));
-}
-
-// ========== 充值兑换 ==========
-function showRedeemModal() {
-  document.querySelector('.modal-overlay')?.remove();
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay';
-  overlay.innerHTML = `
-    <div class="modal">
-      <h3>充值兑换</h3>
-      <p class="text-muted text-center mb-8">输入兑换码，兑换相应积分</p>
-      <div class="form-group">
-        <input type="text" class="input" id="redeemCodeInput" placeholder="请输入兑换码" autofocus style="text-align:center;font-size:16px;letter-spacing:2px;">
-      </div>
-      <div id="redeemResult" class="hidden" style="text-align:center;padding:8px;border-radius:var(--radius-sm);margin-bottom:12px;"></div>
-      <div class="modal-actions">
-        <button class="btn btn-outline btn-sm" onclick="this.closest('.modal-overlay').remove()">取消</button>
-        <button class="btn btn-primary" onclick="doRedeem()">确认兑换</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-  // 回车提交
-  setTimeout(() => {
-    document.getElementById('redeemCodeInput')?.addEventListener('keydown', e => {
-      if (e.key === 'Enter') doRedeem();
-    });
-  }, 100);
-}
-
-function doRedeem() {
-  const input = document.getElementById('redeemCodeInput');
-  const code = input?.value?.trim().toUpperCase();
-  if (!code) return;
-  const resultEl = document.getElementById('redeemResult');
-
-  let prizeCodes = STORAGE.get('prize_codes', []);
-  let pidx = prizeCodes.findIndex(c => c.code === code && !c.used);
-  if (pidx >= 0) {
-    const pc = prizeCodes[pidx];
-    prizeCodes.splice(pidx, 1);
-    STORAGE.set('prize_codes', prizeCodes);
-    STORAGE.incr('points_balance_' + userId, pc.prizePoints || 0);
-    updateStats();
-    resultEl.className = '';
-    resultEl.style.background = 'rgba(34,197,94,.1)';
-    resultEl.style.color = 'var(--success)';
-    resultEl.innerHTML = `成功兑换 <strong>${pc.prizePoints} 积分</strong>（${pc.prizeName}）`;
-    resultEl.classList.remove('hidden');
-    input.value = '';
-    return;
-  }
-
-  const found = STORAGE.get('prize_codes', []).some(c => c.code === code);
-  resultEl.className = '';
-  resultEl.style.background = 'rgba(239,68,68,.1)';
-  resultEl.style.color = 'var(--danger)';
-  resultEl.textContent = found ? '该兑换码已被使用' : '无效的兑换码';
-  resultEl.classList.remove('hidden');
 }
 
 // ========== 更新显示 ==========
-function updateStats() {
-  const history = getHistory();
-  const freeDraws = STORAGE.get('free_draws_' + userId, 0);
-  document.getElementById('freeDraws').textContent = freeDraws;
-  document.getElementById('signCount').textContent = history.length;
-}
+async function loadData() {
+  try {
+    const [signins, freeDraws, signed, config] = await Promise.all([
+      API.getSignins(userId),
+      API.getFreeDraws(userId),
+      API.getSigninToday(userId),
+      API.getConfig()
+    ]);
 
-function renderHistory() {
-  const history = getHistory();
-  const today = todayStr();
-  const todayRecords = history.filter(h => h.date === today);
-  const container = document.getElementById('historyList');
-  if (todayRecords.length === 0) {
-    container.innerHTML = '<p class="text-muted text-center">今日暂无签到记录</p>';
-    return;
-  }
-  container.innerHTML = todayRecords.slice().reverse().map(h => `
-    <div style="padding:8px 0;border-bottom:1px solid var(--border);">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span style="font-size:13px;">${new Date(h.time).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}</span>
-        <span><span class="badge badge-success">+${h.points}额度</span></span>
-      </div>
-      ${h.code ? `<div style="font-size:11px;color:var(--primary-light);font-family:monospace;margin-top:4px;">${h.code}</div>` : ''}
-    </div>
-  `).join('');
-}
+    // 更新免费抽奖次数
+    document.getElementById('freeDraws').textContent = freeDraws;
 
-function updateSigninCard() {
-  const history = getHistory();
-  const today = todayStr();
-  const signed = history.some(h => h.date === today);
-  const el = document.getElementById('signinStatus');
-  if (signed) {
-    document.getElementById('signinLabel').textContent = '已签到';
-    document.getElementById('signinDesc').textContent = '明天再来';
-    document.getElementById('signinCard').style.opacity = '0.6';
-    if (el) { el.textContent = '已签到'; el.style.cssText = 'background:rgba(34,197,94,.12);color:#22c55e;'; }
-  } else {
-    if (el) { el.textContent = '未签到'; el.style.cssText = 'background:rgba(239,68,68,.1);color:#ef4444;'; }
+    // 累积签到天数
+    document.getElementById('signCount').textContent = signins.length;
+
+    // 签到状态
+    const statusEl = document.getElementById('signinStatus');
+    if (signed) {
+      statusEl.textContent = '已签到';
+      statusEl.style.cssText = 'background:rgba(34,197,94,.12);color:#22c55e;';
+      document.getElementById('signinLabel').textContent = '已签到';
+      document.getElementById('signinDesc').textContent = '明天再来';
+      document.getElementById('signinCard').style.opacity = '0.6';
+    } else {
+      statusEl.textContent = '未签到';
+      statusEl.style.cssText = 'background:rgba(239,68,68,.1);color:#ef4444;';
+      document.getElementById('signinLabel').textContent = '签到';
+      document.getElementById('signinDesc').textContent = '签到领积分 + 免费抽奖';
+      document.getElementById('signinCard').style.opacity = '1';
+    }
+
+    // 今日签到记录
+    const container = document.getElementById('historyList');
+    const todayRecords = signins.filter(h => h.sign_date === todayStr());
+    if (todayRecords.length === 0) {
+      container.innerHTML = '<p class="text-muted text-center">今日暂无签到记录</p>';
+    } else {
+      container.innerHTML = todayRecords.slice().reverse().map(h => `
+        <div style="padding:8px 0;border-bottom:1px solid var(--border);">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:13px;">${new Date(h.signed_at).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}</span>
+            <span><span class="badge badge-success">+${h.points_earned}额度</span></span>
+          </div>
+        </div>
+      `).join('');
+    }
+  } catch (e) {
+    console.error('加载数据失败:', e);
+    toast('数据加载失败，请检查网络连接', 'error');
   }
 }
 
 // ========== 自定义链接渲染 ==========
-function renderCustomLinks() {
-  const links = STORAGE.get('custom_links', []);
-  const container = document.getElementById('customLinksList');
-  const card = document.getElementById('customLinksCard');
-  if (links.length === 0) {
-    if (card) card.classList.add('hidden');
-    return;
+async function renderCustomLinks() {
+  try {
+    const links = await API.getLinks();
+    const container = document.getElementById('customLinksList');
+    const card = document.getElementById('customLinksCard');
+    if (links.length === 0) {
+      if (card) card.classList.add('hidden');
+      return;
+    }
+    if (card) card.classList.remove('hidden');
+    container.innerHTML = links.map(l => `
+      <a href="${l.url}" target="_blank" class="btn btn-outline btn-sm" style="text-decoration:none;padding:4px 10px;font-size:12px;">${l.name}</a>
+    `).join('');
+  } catch (e) {
+    console.error('加载链接失败:', e);
   }
-  if (card) card.classList.remove('hidden');
-  container.innerHTML = links.map(l => `
-    <a href="${l.url}" target="_blank" class="btn btn-outline btn-sm" style="text-decoration:none;padding:4px 10px;font-size:12px;">${l.name}</a>
-  `).join('');
 }
 
 // ========== 初始化 ==========
-updateStats();
-renderHistory();
-updateSigninCard();
-renderCustomLinks();
+(async function init() {
+  try {
+    // 确保用户存在
+    await API.ensureUser(userId);
+    // 加载所有数据
+    await Promise.all([
+      loadData(),
+      renderCustomLinks()
+    ]);
+  } catch (e) {
+    console.error('初始化失败:', e);
+    toast('初始化失败，请检查网络连接', 'error');
+  }
+})();
 </script>
 </body>
 </html>

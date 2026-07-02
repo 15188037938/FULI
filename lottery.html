@@ -95,11 +95,11 @@
   <!-- 余额状态 -->
   <div class="stats-row">
     <div class="stat-item">
-      <div class="stat-value" style="color:var(--warning);" id="freeDraws">0</div>
+      <div class="stat-value" style="color:var(--warning);" id="freeDraws">-</div>
       <div class="stat-label">免费次数</div>
     </div>
     <div class="stat-item">
-      <div class="stat-value" style="color:var(--primary-light);" id="myPoints">0</div>
+      <div class="stat-value" style="color:var(--primary-light);" id="myPoints">-</div>
       <div class="stat-label">
         积分余额
         <button class="btn btn-sm" id="rechargeBtn" style="padding:2px 10px;font-size:11px;margin-left:6px;background:rgba(99,102,241,.15);color:var(--primary-light);border:1px solid var(--primary);border-radius:12px;cursor:pointer;" onclick="showRechargeModal()">充值</button>
@@ -131,8 +131,9 @@
 
 </div>
 
+<script src="api-client.js"></script>
 <script>
-// ========== 奖品配置（默认值，可由管理员修改权重） ==========
+// ========== 奖品配置 ==========
 const DEFAULT_PRIZES = [
   { id:0, name:'100积分', weight:1,  color:'#f43f5e', dotColor:'#fecdd3', points:100 },
   { id:1, name:'70积分',  weight:1,  color:'#f97316', dotColor:'#fed7aa', points:70 },
@@ -144,61 +145,40 @@ const DEFAULT_PRIZES = [
   { id:7, name:'谢谢参与', weight:20, color:'#6b7280', dotColor:'#d1d5db', points:0 },
 ];
 
-function getPrizes() {
-  const base = JSON.parse(JSON.stringify(DEFAULT_PRIZES));
-  const saved = SL('prize_config', null);
-  if (saved && Array.isArray(saved)) {
-    saved.forEach(sp => {
-      const match = sp.id !== undefined
-        ? base.find(bp => bp.id === sp.id)
-        : base.find(bp => bp.name === sp.name);
-      if (match) {
-        match.weight = sp.weight;
-        if (sp.name) match.name = sp.name;
-        if (sp.points !== undefined) match.points = sp.points;
-      }
-    });
+let prizes = [...DEFAULT_PRIZES];
+
+async function loadPrizeConfig() {
+  try {
+    const saved = await API.getPrizeConfig();
+    if (saved && Array.isArray(saved)) {
+      prizes = DEFAULT_PRIZES.map(dp => {
+        const match = saved.find(s => s.id === dp.id);
+        return match ? { ...dp, weight: match.weight, name: match.name, points: match.points !== undefined ? match.points : dp.points } : dp;
+      });
+    }
+    const totalWeight = prizes.reduce((s, p) => s + p.weight, 0);
+    prizes = prizes.map(p => ({ ...p, prob: totalWeight > 0 ? p.weight / totalWeight : 0 }));
+  } catch (e) {
+    console.error('加载奖品配置失败:', e);
   }
-  const totalWeight = base.reduce((s, p) => s + p.weight, 0);
-  return base.map(p => ({
-    ...p,
-    prob: totalWeight > 0 ? p.weight / totalWeight : 0
-  }));
 }
 
-const prizes = getPrizes(); // 初始化时计算一次
-
-// ========== 数据管理 ==========
-function SL(key, fallback) {
-  try { const v = localStorage.getItem('sl_' + key); return v ? JSON.parse(v) : fallback; }
-  catch { return fallback; }
+// ========== 设备指纹 ==========
+function getFingerprint() {
+  const parts = [
+    navigator.platform || '',
+    screen.width + 'x' + screen.height + 'x' + screen.colorDepth,
+    new Date().getTimezoneOffset(),
+    navigator.hardwareConcurrency || 0,
+    navigator.language || ''
+  ];
+  return 'fp_' + btoa(parts.join('|')).slice(0, 24).replace(/[^a-zA-Z0-9]/g,'');
 }
-function SS(key, val) { localStorage.setItem('sl_' + key, JSON.stringify(val)); }
-function incr(key, delta) { const v = SL(key, 0); SS(key, v + delta); return v + delta; }
 
-const userId = (() => {
-  let u = SL('userId', '');
-  if (!u) {
-    const parts = [navigator.platform||'', screen.width+'x'+screen.height+'x'+screen.colorDepth, new Date().getTimezoneOffset(), navigator.hardwareConcurrency||0, navigator.language||''];
-    u = 'fp_' + btoa(parts.join('|')).slice(0,24).replace(/[^a-zA-Z0-9]/g,'');
-    SS('userId', u);
-  }
-  return u;
-})();
+const userId = getFingerprint();
 
-function getDrawHistory() { return SL('draw_' + userId, []); }
-function getFreeDraws() { return SL('free_draws_' + userId, 0); }
-function getBalance() { return SL('points_balance_' + userId, 0); }
-
-// ========== 迁移旧抽奖数据 ==========
-(function migrateDrawPoints() {
-  if (localStorage.getItem('sl_points_balance_' + userId) !== null) return;
-  const history = SL('history_' + userId, []);
-  const drawHistory = getDrawHistory();
-  const total = history.reduce((s,h)=>s+h.points,0) + drawHistory.reduce((s,h)=>s+(h.points||0),0);
-  SS('points_balance_' + userId, total);
-  SS('free_draws_' + userId, 0);
-})();
+let freeDraws = 0;
+let balance = 0;
 
 function toast(msg, type='info') {
   const el = document.createElement('div');
@@ -213,13 +193,14 @@ const ctx = canvas.getContext('2d');
 const W = 680, H = 680;
 const cx = W/2, cy = H/2;
 const radius = 300;
-const segAngle = (2 * Math.PI) / prizes.length;
+let segAngle = (2 * Math.PI) / prizes.length;
 const pointerAngle = -Math.PI / 2;
 
 let currentAngle = 0;
 let spinning = false;
 
 function drawWheel(rotation = 0) {
+  segAngle = (2 * Math.PI) / prizes.length;
   ctx.clearRect(0, 0, W, H);
   ctx.beginPath();
   ctx.arc(cx, cy, radius + 10, 0, 2 * Math.PI);
@@ -284,31 +265,16 @@ function pickPrize() {
   return prizes.length - 1;
 }
 
-function spin() {
+async function spin() {
   if (spinning) return;
 
-  // 检查是否有抽奖资格
-  const freeDraws = getFreeDraws();
-  const balance = getBalance();
-  let costFree = false;
-
-  if (freeDraws > 0) {
-    costFree = true;
-  } else if (balance >= 1) {
-    costFree = false;
-  } else {
+  if (freeDraws <= 0 && balance < 1) {
     toast('积分不足！请先签到获取积分和免费次数', 'error');
     return;
   }
 
-  // 扣费
-  if (costFree) {
-    incr('free_draws_' + userId, -1);
-  } else {
-    incr('points_balance_' + userId, -1);
-  }
+  const costFree = freeDraws > 0;
 
-  updateStats();
   spinning = true;
   document.getElementById('spinBtn').classList.add('spinning');
   document.getElementById('spinBtn').innerHTML = '...';
@@ -339,7 +305,6 @@ function spin() {
       currentAngle = targetAngle % (2 * Math.PI);
       spinning = false;
       document.getElementById('spinBtn').classList.remove('spinning');
-      updateSpinBtn();
       onSpinComplete(prizeIdx, costFree);
     }
   }
@@ -347,73 +312,52 @@ function spin() {
   requestAnimationFrame(animate);
 }
 
-function onSpinComplete(idx, costFree) {
+async function onSpinComplete(idx, costFree) {
   const prize = prizes[idx];
-  const history = getDrawHistory();
   const isWin = idx !== prizes.length - 1;
 
-  // 记录抽奖
-  const record = {
-    time: new Date().toISOString(),
-    prize: prize.name,
-    points: prize.points,
-    costFree: costFree
-  };
+  try {
+    // 调用 API 记录抽奖并扣费
+    const result = await API.draw(userId, prize.name, prize.points, costFree);
+    freeDraws = result.freeDraws;
+    balance = result.points;
+    updateStats();
 
-  let codeStr = '';
+    // 显示结果
+    document.getElementById('resultArea').classList.remove('hidden');
+    const card = document.getElementById('resultCard');
+    const costLabel = costFree
+      ? '<span class="badge badge-success" style="margin-left:6px;">免费抽</span>'
+      : '<span class="badge badge-warning" style="margin-left:6px;">-1积分</span>';
 
-  // 中奖：从奖品兑换码池发放兑换码（积分需手动充值兑换）
-  if (isWin && prize.points > 0) {
-
-    const prizeCodes = SL('prize_codes', []);
-    const availIdx = prizeCodes.findIndex(c => !c.used && c.prizeName === prize.name);
-    if (availIdx >= 0) {
-      codeStr = prizeCodes[availIdx].code;
-      prizeCodes.splice(availIdx, 1);
-      SS('prize_codes', prizeCodes);
-    } else {
-      // 兑换码耗尽，依然记录但提示
-      toast('兑换码耗尽，请联系管理员补发，QQ：9200563', 'error');
-    }
-    record.code = codeStr;
+    card.innerHTML = `
+      <div class="result-icon" style="background:${isWin?'rgba(34,197,94,.15)':'rgba(107,114,128,.15)'};color:${prize.color};">
+        ${isWin ? 'WIN' : '-_-'}
+      </div>
+      <div class="result-info">
+        <div class="result-name" style="color:${isWin ? 'var(--success)' : 'var(--text-muted)'}">
+          ${prize.name}${costLabel}
+        </div>
+        <div class="result-desc">
+          ${isWin && prize.points > 0 ? '恭喜中奖！积分已自动到账。' : isWin && prize.points === 0 ? '恭喜中奖！' : '再接再厉，下次好运！'}
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    toast('抽奖记录失败: ' + e.message, 'error');
+    spinning = false;
+    document.getElementById('spinBtn').classList.remove('spinning');
+    updateSpinBtn();
   }
-
-  history.push(record);
-  SS('draw_' + userId, history);
-
-  updateStats();
-  renderDrawHistory();
-
-  // 显示结果
-  document.getElementById('resultArea').classList.remove('hidden');
-  const card = document.getElementById('resultCard');
-  const costLabel = costFree ? '<span class="badge badge-success" style="margin-left:6px;">免费抽</span>' : '<span class="badge badge-warning" style="margin-left:6px;">-1积分</span>';
-
-  card.innerHTML = `
-    <div class="result-icon" style="background:${isWin?'rgba(34,197,94,.15)':'rgba(107,114,128,.15)'};color:${prize.color};">
-      ${isWin ? 'WIN' : '-_-'}
-    </div>
-    <div class="result-info">
-      <div class="result-name" style="color:${isWin ? 'var(--success)' : 'var(--text-muted)'}">
-        ${prize.name}${costLabel}
-      </div>
-      <div class="result-desc">
-        ${isWin ? '恭喜中奖！' + (codeStr ? ' 兑换码已发放。' : '') : '再接再厉，下次好运！'}
-      </div>
-      ${codeStr ? `<div style="margin-top:6px;font-size:11px;color:var(--primary-light);font-family:monospace;">兑换码: ${codeStr}</div>` : ''}
-    </div>
-  `;
 }
 
 // ========== UI 更新 ==========
 function updateStats() {
-  document.getElementById('freeDraws').textContent = getFreeDraws();
-  document.getElementById('myPoints').textContent = getBalance();
+  document.getElementById('freeDraws').textContent = freeDraws;
+  document.getElementById('myPoints').textContent = balance;
 }
 
 function updateSpinBtn() {
-  const freeDraws = getFreeDraws();
-  const balance = getBalance();
   const btn = document.getElementById('spinBtn');
   if (freeDraws > 0) {
     btn.innerHTML = '抽奖<span style="font-size:10px;display:block;">免费</span>';
@@ -427,14 +371,18 @@ function updateSpinBtn() {
   btn.style.opacity = '1';
 }
 
-function renderPrizeList() { return ''; } // 已移除概率展示
-
-function showRechargeModal() {
-  const config = SL('config', { rechargeEnabled: true });
-  if (config.rechargeEnabled === false) {
-    toast('充值通道暂时关闭，如需充值，请联系管理员QQ：9200563或加入Q群：722357283', 'info');
-    return;
+// ========== 充值兑换 ==========
+async function showRechargeModal() {
+  try {
+    const config = await API.getConfig();
+    if (config.rechargeEnabled === false) {
+      toast('充值通道暂时关闭，如需充值，请联系管理员', 'info');
+      return;
+    }
+  } catch (e) {
+    // 默认允许
   }
+
   document.querySelector('.modal-overlay')?.remove();
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -461,54 +409,66 @@ function showRechargeModal() {
   }, 100);
 }
 
-function doRecharge() {
+async function doRecharge() {
   const input = document.getElementById('redeemCodeInput');
   const code = input?.value?.trim().toUpperCase();
   if (!code) return;
   const resultEl = document.getElementById('redeemResult');
 
-  let prizeCodes = SL('prize_codes', []);
-  let pidx = prizeCodes.findIndex(c => c.code === code && !c.used);
-  if (pidx >= 0) {
-    const pc = prizeCodes[pidx];
-    prizeCodes.splice(pidx, 1);
-    SS('prize_codes', prizeCodes);
-    incr('points_balance_' + userId, pc.prizePoints || 0);
+  try {
+    const result = await API.usePrizeCode(code, userId);
+    // 刷新积分
+    balance = await API.getPoints(userId);
     updateStats();
+
     resultEl.className = '';
     resultEl.style.background = 'rgba(34,197,94,.1)';
     resultEl.style.color = 'var(--success)';
-    resultEl.innerHTML = `成功兑换 <strong>${pc.prizePoints} 积分</strong>（${pc.prizeName}）`;
+    resultEl.innerHTML = `成功兑换 <strong>${result.prizePoints} 积分</strong>（${result.prizeName}）`;
     resultEl.classList.remove('hidden');
     input.value = '';
-    return;
+    toast('兑换成功！', 'success');
+  } catch (e) {
+    resultEl.className = '';
+    resultEl.style.background = 'rgba(239,68,68,.1)';
+    resultEl.style.color = 'var(--danger)';
+    resultEl.textContent = e.message || '兑换失败';
+    resultEl.classList.remove('hidden');
   }
-
-  const found = SL('prize_codes', []).some(c => c.code === code);
-  resultEl.className = '';
-  resultEl.style.background = 'rgba(239,68,68,.1)';
-  resultEl.style.color = 'var(--danger)';
-  resultEl.textContent = found ? '该兑换码已被使用' : '无效的兑换码';
-  resultEl.classList.remove('hidden');
 }
 
-function renderDrawHistory() { return ''; } // 已移除抽奖记录展示
-
 // ========== 初始化 ==========
-// 加载抽奖说明
-(function loadNotice() {
-  const notice = SL('lottery_notice', '');
-  const el = document.getElementById('lotteryNotice');
-  const textEl = document.getElementById('lotteryNoticeText');
-  if (notice.trim()) {
-    textEl.textContent = notice;
-    el.classList.remove('hidden');
+(async function init() {
+  try {
+    await API.ensureUser(userId);
+    await loadPrizeConfig();
+
+    // 并行加载数据
+    const [notice, pts, draws] = await Promise.all([
+      API.getLotteryNotice(),
+      API.getPoints(userId),
+      API.getFreeDraws(userId)
+    ]);
+
+    balance = pts;
+    freeDraws = draws;
+
+    // 加载抽奖说明
+    if (notice && notice.text && notice.text.trim()) {
+      document.getElementById('lotteryNoticeText').textContent = notice.text;
+      document.getElementById('lotteryNotice').classList.remove('hidden');
+    }
+
+    drawWheel(0);
+    updateStats();
+    updateSpinBtn();
+  } catch (e) {
+    console.error('初始化失败:', e);
+    toast('初始化失败，请检查网络', 'error');
+    // 用默认奖品列表画转盘
+    drawWheel(0);
   }
 })();
-
-drawWheel(0);
-updateStats();
-updateSpinBtn();
 </script>
 </body>
 </html>
