@@ -104,7 +104,7 @@ function SL(key, fallback) {
   try { const v = localStorage.getItem('sl_' + key); return v ? JSON.parse(v) : fallback; }
   catch { return fallback; }
 }
-function SS(key, val) { localStorage.setItem('sl_' + key, JSON.stringify(val)); }
+function SS(key, val) { localStorage.setItem('sl_' + key, JSON.stringify(val)); try { autoBackup(); } catch(e) {} }
 
 function getConfig() { return SL('config', { signinPoints: 5, adminPassword: 'admin123' }); }
 const DEFAULT_PRIZES = [
@@ -344,6 +344,23 @@ function renderAdmin() {
           <span class="text-muted" style="font-weight:400;margin-left:8px;" id="linksCount">${renderLinksCount()}</span>
         </div>
         <div id="linksList">${renderLinksList()}</div>
+      </div>
+
+      <!-- 数据备份 -->
+      <div class="card admin-wide">
+        <div class="card-title">
+          <span class="icon green">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </span>
+          数据备份
+        </div>
+        <p class="text-muted mb-8">系统每次修改数据自动保存本地快照（≤5分钟一次）。建议定期导出文件备份，彻底防止数据丢失。</p>
+        <div class="flex gap-8" style="flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="exportAllData()">导出数据</button>
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('importFileInput').click()">导入恢复</button>
+          <input type="file" id="importFileInput" accept=".json" style="display:none" onchange="importAllData(event)">
+          <button class="btn btn-outline btn-sm" onclick="restoreFromAutoBackup()">从本地快照恢复</button>
+        </div>
       </div>
 
       </div><!-- /admin-grid -->
@@ -627,6 +644,94 @@ function doLogout() {
   state = 'login';
   render();
   toast('已退出', 'info');
+}
+
+// ========== 数据备份与恢复 ==========
+function getAllData() {
+  const data = {};
+  // 遍历所有 sl_ 前缀的 localStorage 项
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('sl_')) {
+      try { data[key] = JSON.parse(localStorage.getItem(key)); }
+      catch { data[key] = localStorage.getItem(key); }
+    }
+  }
+  return data;
+}
+
+function exportAllData() {
+  const data = getAllData();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'fuli_backup_' + new Date().toISOString().slice(0, 10) + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('数据已导出，请妥善保管备份文件', 'success');
+}
+
+function importAllData(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (typeof data !== 'object' || data === null) throw new Error('无效的备份文件');
+      let count = 0;
+      for (const key of Object.keys(data)) {
+        if (key.startsWith('sl_')) {
+          localStorage.setItem(key, JSON.stringify(data[key]));
+          count++;
+        }
+      }
+      toast(`已恢复 ${count} 项数据，页面即将刷新`, 'success');
+      setTimeout(() => location.reload(), 1200);
+    } catch(err) {
+      toast('导入失败：' + err.message, 'error');
+    }
+  };
+  reader.readAsText(file);
+  // 重置 file input，允许重复导入同一文件
+  event.target.value = '';
+}
+
+// ========== 自动备份（每次修改时自动保存快照）==========
+function autoBackup() {
+  const now = Date.now();
+  const last = parseInt(localStorage.getItem('sl_auto_backup_ts') || '0');
+  // 每 5 分钟备份一次，避免频繁读写
+  if (now - last < 300000) return;
+  localStorage.setItem('sl_auto_backup_ts', String(now));
+  const data = getAllData();
+  localStorage.setItem('sl_auto_backup', JSON.stringify(data));
+}
+
+// ========== 从自动备份恢复 ==========
+function restoreFromAutoBackup() {
+  const raw = localStorage.getItem('sl_auto_backup');
+  if (!raw) { toast('没有找到自动备份', 'error'); return; }
+  if (!confirm('将用本地快照覆盖当前所有数据，确定？')) return;
+  try {
+    const data = JSON.parse(raw);
+    if (typeof data !== 'object') throw new Error('备份数据损坏');
+    let count = 0;
+    // 恢复所有 sl_ 数据，但跳过备份自身的 key
+    for (const key of Object.keys(data)) {
+      if (key.startsWith('sl_') && key !== 'sl_auto_backup' && key !== 'sl_auto_backup_ts') {
+        localStorage.setItem(key, JSON.stringify(data[key]));
+        count++;
+      }
+    }
+    toast(`已从本地快照恢复 ${count} 项数据，页面即将刷新`, 'success');
+    setTimeout(() => location.reload(), 1200);
+  } catch(err) {
+    toast('快照恢复失败：' + err.message, 'error');
+  }
 }
 
 // ========== 初始化 ==========
