@@ -529,12 +529,12 @@ function showBatchPrizeModal() {
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
     <div class="modal">
-      <h3>批量添加奖品兑换码</h3>
-      <p class="text-muted text-center mb-8">每行一个，格式: 兑换码,奖品名称</p>
-      <textarea class="textarea" id="batchPrizeInput" rows="6" placeholder="ABC123,100积分&#10;XYZ789,50积分"></textarea>
+      <h3>批量添加</h3>
+      <p class="text-muted text-center mb-8">一行一个兑换码，将关联到当前选择的奖品名称</p>
+      <textarea class="textarea" id="batchPrizeInput" rows="6"></textarea>
       <div class="modal-actions mt-12">
         <button class="btn btn-outline btn-sm" onclick="this.closest('.modal-overlay').remove()">取消</button>
-        <button class="btn btn-primary" onclick="doBatchAddPrize()">批量添加</button>
+        <button class="btn btn-primary" onclick="doBatchAddPrize()">添加</button>
       </div>
     </div>
   `;
@@ -545,27 +545,27 @@ function showBatchPrizeModal() {
 function doBatchAddPrize() {
   const text = document.getElementById('batchPrizeInput')?.value?.trim();
   if (!text) { toast('请输入兑换码', 'error'); return; }
-  const lines = text.split('\n').filter(l => l.trim());
+  const name = document.getElementById('prizeCodeName')?.value;
   const prizes = getPrizeConfig();
+  const prize = prizes.find(p => p.name === name);
+  if (!name || !prize) { toast('请先选择奖品名称', 'error'); return; }
+  const lines = text.split('\n').filter(l => l.trim());
   const prizeCodes = getPrizeCodes();
   let added = 0;
   for (const line of lines) {
-    const parts = line.split(',');
-    const code = parts[0]?.trim();
-    const pname = parts[1]?.trim();
-    if (!code || !pname) continue;
+    const code = line.trim();
+    if (!code) continue;
     if (prizeCodes.some(c => c.code === code)) continue;
-    const prize = prizes.find(p => p.name === pname);
     prizeCodes.push({
       code,
-      prizeName: pname,
+      prizeName: name,
       prizePoints: prize ? (prize.points || 0) : 0,
       used: false, usedBy: null, usedAt: null
     });
     added++;
   }
   SS('prize_codes', prizeCodes);
-  toast(`批量成功添加 ${added} 个兑换码`, 'success');
+  toast(`已添加 ${added} 个兑换码`, 'success');
   document.querySelector('.modal-overlay')?.remove();
   render();
 }
