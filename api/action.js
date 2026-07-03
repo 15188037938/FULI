@@ -196,7 +196,17 @@ module.exports = async (req, res) => {
       case 'getSignins': {
         const { userId } = data;
         const { rows } = await sql`
-          SELECT * FROM sign_ins WHERE user_id = ${userId} ORDER BY signed_at DESC
+          SELECT
+            id,
+            user_id,
+            sign_date::TEXT as sign_date,
+            points_earned,
+            prize_code,
+            prize_name,
+            signed_at
+          FROM sign_ins
+          WHERE user_id = ${userId}
+          ORDER BY signed_at DESC
         `;
         return res.json({ ok: true, data: rows });
       }
@@ -204,7 +214,9 @@ module.exports = async (req, res) => {
       case 'getSigninToday': {
         const { userId } = data;
         const { rows } = await sql`
-          SELECT id FROM sign_ins WHERE user_id = ${userId} AND sign_date = ${todayStr()}::DATE
+          SELECT id FROM sign_ins
+          WHERE user_id = ${userId}
+            AND sign_date::TEXT = ${todayStr()}
         `;
         return res.json({ ok: true, data: rows.length > 0 });
       }
