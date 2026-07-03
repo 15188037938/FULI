@@ -247,9 +247,41 @@ module.exports = async (req, res) => {
           await sql`SELECT increment_points(${userId}, -1, 'spend', '转盘抽奖')`;
         }
 
+        // 中奖后从奖品池抽取对应积分额度的兑换码
+        let drawPrizeCode = null;
+        let prizeCode = '';
+        try {
+          if (prizePoints > 0) {
+            const { rows: availableCodes } = await sql`
+              SELECT id, code, prize_name, prize_points
+              FROM prize_codes
+              WHERE used_at IS NULL AND prize_points = ${prizePoints}
+              ORDER BY RANDOM()
+              LIMIT 1
+            `;
+            if (availableCodes.length > 0) {
+              const code = availableCodes[0];
+              drawPrizeCode = { code: code.code, prizeName: code.prize_name, prizePoints: code.prize_points };
+              prizeCode = code.code;
+
+              // 写入兑换历史
+              const clientIP = getClientIP(req);
+              await sql`
+                INSERT INTO exchange_history (user_id, code, prize_name, prize_points, source, ip_address)
+                VALUES (${userId}, ${code.code}, ${code.prize_name}, ${code.prize_points}, 'lottery', ${clientIP})
+              `;
+
+              // 删除兑换码
+              await sql`DELETE FROM prize_codes WHERE id = ${code.id}`;
+            }
+          }
+        } catch (e) {
+          console.error('抽奖发放兑换码失败:', e);
+        }
+
         await sql`
-          INSERT INTO draw_records (user_id, prize_name, points_cost, is_free, drawn_at)
-          VALUES (${userId}, ${prizeName}, ${costFree ? 0 : 1}, ${!!costFree}, ${nowISO()}::TIMESTAMPTZ)
+          INSERT INTO draw_records (user_id, prize_name, prize_code, points_cost, is_free, drawn_at)
+          VALUES (${userId}, ${prizeName}, ${prizeCode}, ${costFree ? 0 : 1}, ${!!costFree}, ${nowISO()}::TIMESTAMPTZ)
         `;
 
         const { rows: points } = await sql`SELECT balance FROM points WHERE user_id = ${userId}`;
@@ -259,7 +291,9 @@ module.exports = async (req, res) => {
           ok: true,
           data: {
             points: points[0]?.balance || 0,
-            freeDraws: freeDraws[0]?.remaining || 0
+            freeDraws: freeDraws[0]?.remaining || 0,
+            prizeCode,  // 中奖获得的兑换码（可能为空）
+            prizeName: drawPrizeCode?.prizeName || ''
           }
         });
       }

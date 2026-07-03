@@ -59,11 +59,12 @@ CREATE TABLE IF NOT EXISTS point_transactions (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 7. 抽奖记录表
+-- 7. 抽奖记录表（新增 prize_code 列存储中奖获得的兑换码）
 CREATE TABLE IF NOT EXISTS draw_records (
   id BIGSERIAL PRIMARY KEY,
   user_id TEXT NOT NULL,
   prize_name TEXT NOT NULL,
+  prize_code TEXT DEFAULT '',
   points_cost INT DEFAULT 0,
   is_free BOOLEAN DEFAULT false,
   drawn_at TIMESTAMPTZ DEFAULT NOW()
@@ -151,3 +152,4 @@ CREATE INDEX IF NOT EXISTS idx_exchange_history_time ON exchange_history(exchang
 -- 13. 为已有数据库新增 prize_code / prize_name 列（兼容升级）
 ALTER TABLE sign_ins ADD COLUMN IF NOT EXISTS prize_code TEXT DEFAULT '';
 ALTER TABLE sign_ins ADD COLUMN IF NOT EXISTS prize_name TEXT DEFAULT '';
+ALTER TABLE draw_records ADD COLUMN IF NOT EXISTS prize_code TEXT DEFAULT '';
