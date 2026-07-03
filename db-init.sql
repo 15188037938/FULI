@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS system_config (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. 签到记录表（增加 prize_code 和 prize_name 列存储当天签到获得的兑换码）
+-- 3. 签到记录表（增加风控相关列：client_ip, device_id, is_emulator）
 CREATE TABLE IF NOT EXISTS sign_ins (
   id BIGSERIAL PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -27,6 +27,9 @@ CREATE TABLE IF NOT EXISTS sign_ins (
   points_earned INT NOT NULL DEFAULT 5,
   prize_code TEXT DEFAULT '',
   prize_name TEXT DEFAULT '',
+  client_ip TEXT DEFAULT '',
+  device_id TEXT DEFAULT '',
+  is_emulator BOOLEAN DEFAULT false,
   signed_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(user_id, sign_date)
 );
@@ -148,8 +151,12 @@ CREATE INDEX IF NOT EXISTS idx_prize_codes_code ON prize_codes(code);
 CREATE INDEX IF NOT EXISTS idx_prize_codes_used ON prize_codes(used_at);
 CREATE INDEX IF NOT EXISTS idx_exchange_history_user ON exchange_history(user_id);
 CREATE INDEX IF NOT EXISTS idx_exchange_history_time ON exchange_history(exchanged_at);
+CREATE INDEX IF NOT EXISTS idx_sign_ins_ip ON sign_ins(client_ip, sign_date);
 
--- 13. 为已有数据库新增 prize_code / prize_name 列（兼容升级）
+-- 13. 为已有数据库新增列（兼容升级）
 ALTER TABLE sign_ins ADD COLUMN IF NOT EXISTS prize_code TEXT DEFAULT '';
 ALTER TABLE sign_ins ADD COLUMN IF NOT EXISTS prize_name TEXT DEFAULT '';
+ALTER TABLE sign_ins ADD COLUMN IF NOT EXISTS client_ip TEXT DEFAULT '';
+ALTER TABLE sign_ins ADD COLUMN IF NOT EXISTS device_id TEXT DEFAULT '';
+ALTER TABLE sign_ins ADD COLUMN IF NOT EXISTS is_emulator BOOLEAN DEFAULT false;
 ALTER TABLE draw_records ADD COLUMN IF NOT EXISTS prize_code TEXT DEFAULT '';

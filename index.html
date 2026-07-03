@@ -93,12 +93,52 @@ function getFingerprint() {
 
 const userId = getFingerprint();
 
+// ========== 风控：设备ID（持久化存储，清缓存也不变）==========
+function getDeviceId() {
+  let id = localStorage.getItem('_did');
+  if (!id) {
+    id = 'did_' + Array.from({length:16}, () => Math.random().toString(36)[2]).join('');
+    localStorage.setItem('_did', id);
+  }
+  return id;
+}
+
+// ========== 风控：模拟器检测 ==========
+function checkEmulator() {
+  const ua = navigator.userAgent.toLowerCase();
+  const emuKeywords = ['bluestacks','nox','mumu','memu','droid4x','genymotion','leapdroid','andy','koplayer','remix','tianyi','xiaoyao','vmos','x8','virtual','vmware'];
+  if (emuKeywords.some(k => ua.includes(k))) return true;
+  if (navigator.webdriver) return true;
+  // 无插件且提示Chrome（常见模拟器特征）
+  if (navigator.plugins && navigator.plugins.length === 0 && ua.includes('chrome')) return true;
+  return false;
+}
+const deviceId = getDeviceId();
+const isEmulator = checkEmulator();
+
 // ========== UI 工具 ==========
 function toast(msg, type='info') {
   const el = document.createElement('div');
   el.className = 'toast ' + type; el.textContent = msg;
   document.getElementById('toastContainer').appendChild(el);
   setTimeout(() => { el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),300); }, 2500);
+}
+
+// 复制兑换码（兼容各浏览器）
+function copyCode(code) {
+  const ta = document.createElement('textarea');
+  ta.value = code;
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand('copy');
+    toast('已复制', 'success');
+  } catch (e) {
+    toast('复制失败，请手动复制', 'error');
+  }
+  ta.remove();
 }
 
 function todayStr() {
@@ -118,7 +158,7 @@ async function doSignin() {
   btn.style.opacity = '0.6';
 
   try {
-    const result = await API.signin(userId);
+    const result = await API.signin(userId, deviceId, isEmulator);
     // 构建签到成功提示信息
     let msg = `签到成功！+${result.earnedPoints} 积分 + 免费抽奖`;
     if (result.signPrizeCode) {
@@ -178,9 +218,9 @@ async function loadData() {
             <span style="font-size:13px;">${new Date(h.signed_at).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}</span>
             <span><span class="badge badge-success">+${h.points_earned}积分</span></span>
           </div>
-          ${h.prize_code ? `<div style="font-size:12px;color:var(--warning);display:flex;align-items:center;gap:4px;" title="复制: ${h.prize_code}">
+          ${h.prize_code ? `<div style="font-size:12px;color:var(--warning);display:flex;align-items:center;gap:4px;" title="点击复制: ${h.prize_code}">
             <span style="font-weight:600;">🎁 兑换码:</span>
-            <span style="font-family:monospace;cursor:pointer;" onclick="navigator.clipboard.writeText('${h.prize_code}');toast('已复制','success');">${h.prize_code}</span>
+            <span style="font-family:monospace;cursor:pointer;" onclick="copyCode('${h.prize_code}')">${h.prize_code}</span>
             <span style="color:var(--text-muted);font-size:11px;">(${h.prize_name})</span>
           </div>` : ''}
         </div>

@@ -200,6 +200,23 @@ function toast(msg, type='info') {
   setTimeout(() => { el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),300); }, 2500);
 }
 
+// 复制兑换码（兼容各浏览器）
+function copyCode(code) {
+  const ta = document.createElement('textarea');
+  ta.value = code;
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand('copy');
+    toast('已复制', 'success');
+  } catch (e) {
+    toast('复制失败，请手动复制', 'error');
+  }
+  ta.remove();
+}
+
 // ========== Canvas 转盘 ==========
 const canvas = document.getElementById('wheelCanvas');
 const ctx = canvas.getContext('2d');
@@ -356,7 +373,7 @@ async function onSpinComplete(idx, costFree) {
         </div>
         <div class="result-desc">
           ${result.prizeCode
-            ? `<span style="color:var(--warning);">🎁 兑换码: <span style="font-family:monospace;cursor:pointer;" onclick="navigator.clipboard.writeText('${result.prizeCode}');toast('已复制','success');">${result.prizeCode}</span> (${result.prizeName})</span>`
+            ? `<span style="color:var(--warning);">🎁 兑换码: <span style="font-family:monospace;cursor:pointer;" onclick="copyCode('${result.prizeCode}')">${result.prizeCode}</span> (${result.prizeName})</span>`
             : isWin && prize.points > 0
               ? '恭喜中奖！暂无可兑换码'
               : isWin ? '恭喜中奖！' : '再接再厉，下次好运！'}
@@ -471,7 +488,7 @@ async function loadDrawHistory() {
             <span style="font-weight:500;">${r.prize_name}</span>
             <span style="color:var(--text-muted);font-size:11px;">${new Date(r.drawn_at).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
           </div>
-          ${r.prize_code ? `<div style="font-size:11px;color:var(--warning);margin-top:2px;">🎁 兑换码: <span style="font-family:monospace;cursor:pointer;" onclick="navigator.clipboard.writeText('${r.prize_code}');toast('已复制','success');">${r.prize_code}</span></div>` : ''}
+          ${r.prize_code ? `<div style="font-size:11px;color:var(--warning);margin-top:2px;">🎁 兑换码: <span style="font-family:monospace;cursor:pointer;" onclick="copyCode('${r.prize_code}')">${r.prize_code}</span></div>` : ''}
         </div>
       `).join('');
     }

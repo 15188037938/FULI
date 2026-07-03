@@ -118,9 +118,37 @@ module.exports = async (req, res) => {
 
       // ---------- 签到 ----------
       case 'signin': {
-        const { userId } = data;
+        const { userId, deviceId, isEmulator } = data;
+        const clientIP = getClientIP(req);
 
-        // 检查今天是否已签到
+        // ========== 风控检查 ==========
+
+        // 1. 同IP每天签到上限（默认10次）
+        const { rows: ipCount } = await sql`
+          SELECT COUNT(*) AS cnt FROM sign_ins
+          WHERE client_ip = ${clientIP} AND sign_date = ${todayStr()}::DATE
+        `;
+        if (parseInt(ipCount[0]?.cnt || 0) >= 10) {
+          return res.json({ ok: false, error: '签到过于频繁，请稍后再试（IP限制）' });
+        }
+
+        // 2. 同IP最近30秒内是否签到过（频率限制）
+        const { rows: recentIP } = await sql`
+          SELECT id FROM sign_ins
+          WHERE client_ip = ${clientIP}
+            AND signed_at > NOW() - INTERVAL '30 seconds'
+          LIMIT 1
+        `;
+        if (recentIP.length > 0) {
+          return res.json({ ok: false, error: '操作太频繁，请30秒后再试' });
+        }
+
+        // 3. 模拟器禁止签到
+        if (isEmulator) {
+          return res.json({ ok: false, error: '模拟器环境不支持签到，请使用真实设备' });
+        }
+
+        // 4. 检查今天是否已签到（基于设备指纹）
         const { rows: existing } = await sql`
           SELECT id FROM sign_ins WHERE user_id = ${userId} AND sign_date = ${todayStr()}::DATE
         `;
@@ -133,7 +161,7 @@ module.exports = async (req, res) => {
         const config = configRows[0]?.value || { signinPoints: 5 };
         const earnedPoints = config.signinPoints || 5;
 
-        // 签到发放兑换码：先抽取兑换码，再写入签到记录（带着兑换码一起存）
+        // 签到发放兑换码：先抽取兑换码，再写入签到记录
         let signPrizeCode = null;
         let prizeCode = '';
         let prizeName = '';
@@ -151,25 +179,23 @@ module.exports = async (req, res) => {
             prizeCode = code.code;
             prizeName = code.prize_name;
 
-            // 先写入兑换历史记录，再删除兑换码
-            const clientIP = getClientIP(req);
+            // 写入兑换历史记录
             await sql`
               INSERT INTO exchange_history (user_id, code, prize_name, prize_points, source, ip_address)
               VALUES (${userId}, ${code.code}, ${code.prize_name}, ${code.prize_points}, 'signin', ${clientIP})
             `;
 
-            // 抽取后立即删除，不留数据
+            // 删除兑换码
             await sql`DELETE FROM prize_codes WHERE id = ${code.id}`;
           }
         } catch (e) {
           console.error('签到发放兑换码失败:', e);
-          // 兑换码发放失败不影响签到主流程
         }
 
-        // 记录签到（带着兑换码一起写入）
+        // 记录签到（带着风控信息一起写入）
         await sql`
-          INSERT INTO sign_ins (user_id, sign_date, points_earned, prize_code, prize_name, signed_at)
-          VALUES (${userId}, ${todayStr()}::DATE, ${earnedPoints}, ${prizeCode}, ${prizeName}, ${nowISO()}::TIMESTAMPTZ)
+          INSERT INTO sign_ins (user_id, sign_date, points_earned, prize_code, prize_name, client_ip, device_id, is_emulator, signed_at)
+          VALUES (${userId}, ${todayStr()}::DATE, ${earnedPoints}, ${prizeCode}, ${prizeName}, ${clientIP}, ${deviceId || ''}, ${!!isEmulator}, ${nowISO()}::TIMESTAMPTZ)
         `;
 
         // 增加积分
@@ -178,7 +204,6 @@ module.exports = async (req, res) => {
         // 增加免费抽奖次数
         await sql`SELECT increment_free_draws(${userId}, 1)`;
 
-        // 获取最新数据
         const { rows: points } = await sql`SELECT balance FROM points WHERE user_id = ${userId}`;
         const { rows: freeDraws } = await sql`SELECT remaining FROM free_draws WHERE user_id = ${userId}`;
 
@@ -188,7 +213,7 @@ module.exports = async (req, res) => {
             points: points[0]?.balance || earnedPoints,
             freeDraws: freeDraws[0]?.remaining || 1,
             earnedPoints,
-            signPrizeCode  // 签到获得的兑换码（可能为null）
+            signPrizeCode
           }
         });
       }

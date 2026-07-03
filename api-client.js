@@ -40,7 +40,8 @@ const API = {
   ensureUser: (userId) => API.call('ensureUser', { userId }),
 
   // ---------- 签到 ----------
-  signin: (userId) => API.call('signin', { userId }),
+  signin: (userId, deviceId, isEmulator) =>
+    API.call('signin', { userId, deviceId: deviceId || '', isEmulator: !!isEmulator }),
   getSignins: (userId) => API.call('getSignins', { userId }),
   getSigninToday: (userId) => API.call('getSigninToday', { userId }),
   getTotalSigninUsers: () => API.call('getTotalSigninUsers'),
