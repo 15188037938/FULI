@@ -141,11 +141,9 @@ module.exports = async (req, res) => {
           `;
           if (availableCodes.length > 0) {
             const code = availableCodes[0];
-            await sql`
-              UPDATE prize_codes SET used_by = ${userId}, used_at = ${nowISO()}::TIMESTAMPTZ
-              WHERE id = ${code.id}
-            `;
             signPrizeCode = { code: code.code, prizeName: code.prize_name, prizePoints: code.prize_points };
+            // 抽取后立即删除，不留数据
+            await sql`DELETE FROM prize_codes WHERE id = ${code.id}`;
           }
         } catch (e) {
           console.error('签到发放兑换码失败:', e);
@@ -284,10 +282,8 @@ module.exports = async (req, res) => {
 
         const found = rows[0];
 
-        await sql`
-          UPDATE prize_codes SET used_by = ${userId}, used_at = ${nowISO()}::TIMESTAMPTZ
-          WHERE id = ${found.id}
-        `;
+        // 充值兑换码使用后直接删除，不留数据
+        await sql`DELETE FROM prize_codes WHERE id = ${found.id}`;
 
         await sql`
           SELECT increment_points(${userId}, ${found.prize_points}, 'recharge', ${`兑换码: ${found.prize_name}`})
