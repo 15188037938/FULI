@@ -1,8 +1,15 @@
 const { sql } = require('./_db');
 
 // ========== 工具函数 ==========
+
+// 北京时间日期字符串（修复 Vercel UTC 时区问题）
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  // Date.now() 是 UTC 时间戳，加8小时偏移后取日期
+  const beijingTime = new Date(Date.now() + 8 * 3600 * 1000);
+  const y = beijingTime.getUTCFullYear();
+  const m = String(beijingTime.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(beijingTime.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 function nowISO() {
