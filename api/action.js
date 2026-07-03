@@ -73,14 +73,19 @@ module.exports = async (req, res) => {
       // ---------- 抽奖说明 ----------
       case 'getLotteryNotice': {
         const { rows } = await sql`SELECT value FROM system_config WHERE key = 'lottery_notice'`;
-        return res.json({ ok: true, data: rows[0]?.value || '' });
+        const val = rows[0]?.value;
+        // 兼容两种存储格式：对象 {text:"..."} 或纯字符串
+        const text = (typeof val === 'object' && val !== null) ? (val.text || '') : (typeof val === 'string' ? val : '');
+        return res.json({ ok: true, data: { text } });
       }
 
       case 'setLotteryNotice': {
+        // data 应该是纯字符串，统一存为 { text: "..." } 格式
+        const noticeObj = (typeof data === 'string') ? { text: data } : data;
         await sql`
           INSERT INTO system_config (key, value)
-          VALUES ('lottery_notice', ${JSON.stringify(data)})
-          ON CONFLICT (key) DO UPDATE SET value = ${JSON.stringify(data)}, updated_at = NOW()
+          VALUES ('lottery_notice', ${JSON.stringify(noticeObj)})
+          ON CONFLICT (key) DO UPDATE SET value = ${JSON.stringify(noticeObj)}, updated_at = NOW()
         `;
         return res.json({ ok: true });
       }
@@ -124,6 +129,29 @@ module.exports = async (req, res) => {
         // 增加免费抽奖次数
         await sql`SELECT increment_free_draws(${userId}, 1)`;
 
+        // 签到发放兑换码：从奖品兑换码列表中抽取对应积分额度的未使用兑换码
+        let signPrizeCode = null;
+        try {
+          const { rows: availableCodes } = await sql`
+            SELECT id, code, prize_name, prize_points
+            FROM prize_codes
+            WHERE used_at IS NULL AND prize_points = ${earnedPoints}
+            ORDER BY RANDOM()
+            LIMIT 1
+          `;
+          if (availableCodes.length > 0) {
+            const code = availableCodes[0];
+            await sql`
+              UPDATE prize_codes SET used_by = ${userId}, used_at = ${nowISO()}::TIMESTAMPTZ
+              WHERE id = ${code.id}
+            `;
+            signPrizeCode = { code: code.code, prizeName: code.prize_name, prizePoints: code.prize_points };
+          }
+        } catch (e) {
+          console.error('签到发放兑换码失败:', e);
+          // 兑换码发放失败不影响签到主流程
+        }
+
         // 获取最新数据
         const { rows: points } = await sql`SELECT balance FROM points WHERE user_id = ${userId}`;
         const { rows: freeDraws } = await sql`SELECT remaining FROM free_draws WHERE user_id = ${userId}`;
@@ -133,7 +161,8 @@ module.exports = async (req, res) => {
           data: {
             points: points[0]?.balance || earnedPoints,
             freeDraws: freeDraws[0]?.remaining || 1,
-            earnedPoints
+            earnedPoints,
+            signPrizeCode  // 签到获得的兑换码（可能为null）
           }
         });
       }

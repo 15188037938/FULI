@@ -112,7 +112,12 @@ async function doSignin() {
 
   try {
     const result = await API.signin(userId);
-    toast(`签到成功！+${result.earnedPoints} 积分 + 免费抽奖`, 'success');
+    // 构建签到成功提示信息
+    let msg = `签到成功！+${result.earnedPoints} 积分 + 免费抽奖`;
+    if (result.signPrizeCode) {
+      msg += ` | 🎁 兑换码: ${result.signPrizeCode.code}（${result.signPrizeCode.prizeName}）`;
+    }
+    toast(msg, 'success');
     await loadData();
   } catch (e) {
     toast(e.message || '签到失败', 'error');

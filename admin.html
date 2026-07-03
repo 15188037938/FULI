@@ -440,7 +440,11 @@ async function loadLotteryNotice() {
   try {
     const notice = await API.getLotteryNotice();
     const el = document.getElementById('lotteryNotice');
-    if (el && notice?.text) el.value = notice.text;
+    if (el) {
+      // 兼容两种格式：{ text: "..." } 或纯字符串
+      const text = (notice && typeof notice === 'object') ? (notice.text || '') : (notice || '');
+      if (text) el.value = text;
+    }
   } catch (e) {
     console.error('加载抽奖说明失败:', e);
   }
