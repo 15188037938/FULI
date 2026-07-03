@@ -123,12 +123,12 @@ module.exports = async (req, res) => {
 
         // ========== 风控检查 ==========
 
-        // 1. 同IP每天签到上限（默认10次）
+        // 1. 同IP每天签到上限（默认2次）
         const { rows: ipCount } = await sql`
           SELECT COUNT(*) AS cnt FROM sign_ins
           WHERE client_ip = ${clientIP} AND sign_date = ${todayStr()}::DATE
         `;
-        if (parseInt(ipCount[0]?.cnt || 0) >= 10) {
+        if (parseInt(ipCount[0]?.cnt || 0) >= 2) {
           return res.json({ ok: false, error: '签到过于频繁，请稍后再试（IP限制）' });
         }
 
