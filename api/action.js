@@ -133,20 +133,10 @@ module.exports = async (req, res) => {
         const config = configRows[0]?.value || { signinPoints: 5 };
         const earnedPoints = config.signinPoints || 5;
 
-        // 记录签到
-        await sql`
-          INSERT INTO sign_ins (user_id, sign_date, points_earned, signed_at)
-          VALUES (${userId}, ${todayStr()}::DATE, ${earnedPoints}, ${nowISO()}::TIMESTAMPTZ)
-        `;
-
-        // 增加积分
-        await sql`SELECT increment_points(${userId}, ${earnedPoints}, 'earn', '每日签到')`;
-
-        // 增加免费抽奖次数
-        await sql`SELECT increment_free_draws(${userId}, 1)`;
-
-        // 签到发放兑换码：从奖品兑换码列表中抽取对应积分额度的未使用兑换码
+        // 签到发放兑换码：先抽取兑换码，再写入签到记录（带着兑换码一起存）
         let signPrizeCode = null;
+        let prizeCode = '';
+        let prizeName = '';
         try {
           const { rows: availableCodes } = await sql`
             SELECT id, code, prize_name, prize_points
@@ -158,6 +148,8 @@ module.exports = async (req, res) => {
           if (availableCodes.length > 0) {
             const code = availableCodes[0];
             signPrizeCode = { code: code.code, prizeName: code.prize_name, prizePoints: code.prize_points };
+            prizeCode = code.code;
+            prizeName = code.prize_name;
 
             // 先写入兑换历史记录，再删除兑换码
             const clientIP = getClientIP(req);
@@ -173,6 +165,18 @@ module.exports = async (req, res) => {
           console.error('签到发放兑换码失败:', e);
           // 兑换码发放失败不影响签到主流程
         }
+
+        // 记录签到（带着兑换码一起写入）
+        await sql`
+          INSERT INTO sign_ins (user_id, sign_date, points_earned, prize_code, prize_name, signed_at)
+          VALUES (${userId}, ${todayStr()}::DATE, ${earnedPoints}, ${prizeCode}, ${prizeName}, ${nowISO()}::TIMESTAMPTZ)
+        `;
+
+        // 增加积分
+        await sql`SELECT increment_points(${userId}, ${earnedPoints}, 'earn', '每日签到')`;
+
+        // 增加免费抽奖次数
+        await sql`SELECT increment_free_draws(${userId}, 1)`;
 
         // 获取最新数据
         const { rows: points } = await sql`SELECT balance FROM points WHERE user_id = ${userId}`;

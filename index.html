@@ -159,7 +159,7 @@ async function loadData() {
       document.getElementById('signinCard').style.opacity = '1';
     }
 
-    // 今日签到记录
+    // 今日签到记录（显示兑换码）
     const container = document.getElementById('historyList');
     const todayRecords = signins.filter(h => h.sign_date === todayStr());
     if (todayRecords.length === 0) {
@@ -167,10 +167,15 @@ async function loadData() {
     } else {
       container.innerHTML = todayRecords.slice().reverse().map(h => `
         <div style="padding:8px 0;border-bottom:1px solid var(--border);">
-          <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
             <span style="font-size:13px;">${new Date(h.signed_at).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}</span>
-            <span><span class="badge badge-success">+${h.points_earned}额度</span></span>
+            <span><span class="badge badge-success">+${h.points_earned}积分</span></span>
           </div>
+          ${h.prize_code ? `<div style="font-size:12px;color:var(--warning);display:flex;align-items:center;gap:4px;" title="复制: ${h.prize_code}">
+            <span style="font-weight:600;">🎁 兑换码:</span>
+            <span style="font-family:monospace;cursor:pointer;" onclick="navigator.clipboard.writeText('${h.prize_code}');toast('已复制','success');">${h.prize_code}</span>
+            <span style="color:var(--text-muted);font-size:11px;">(${h.prize_name})</span>
+          </div>` : ''}
         </div>
       `).join('');
     }

@@ -19,12 +19,14 @@ CREATE TABLE IF NOT EXISTS system_config (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. 签到记录表
+-- 3. 签到记录表（增加 prize_code 和 prize_name 列存储当天签到获得的兑换码）
 CREATE TABLE IF NOT EXISTS sign_ins (
   id BIGSERIAL PRIMARY KEY,
   user_id TEXT NOT NULL,
   sign_date DATE NOT NULL DEFAULT CURRENT_DATE,
   points_earned INT NOT NULL DEFAULT 5,
+  prize_code TEXT DEFAULT '',
+  prize_name TEXT DEFAULT '',
   signed_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(user_id, sign_date)
 );
@@ -145,3 +147,7 @@ CREATE INDEX IF NOT EXISTS idx_prize_codes_code ON prize_codes(code);
 CREATE INDEX IF NOT EXISTS idx_prize_codes_used ON prize_codes(used_at);
 CREATE INDEX IF NOT EXISTS idx_exchange_history_user ON exchange_history(user_id);
 CREATE INDEX IF NOT EXISTS idx_exchange_history_time ON exchange_history(exchanged_at);
+
+-- 13. 为已有数据库新增 prize_code / prize_name 列（兼容升级）
+ALTER TABLE sign_ins ADD COLUMN IF NOT EXISTS prize_code TEXT DEFAULT '';
+ALTER TABLE sign_ins ADD COLUMN IF NOT EXISTS prize_name TEXT DEFAULT '';
