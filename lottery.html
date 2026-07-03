@@ -396,7 +396,7 @@ async function showRechargeModal() {
   try {
     const config = await API.getConfig();
     if (config.rechargeEnabled === false) {
-      toast('充值通道暂时关闭，如需充值，请联系管理员', 'info');
+      toast('充值通道暂时关闭，如需充值请联系管理员QQ：9200563', 'info');
       return;
     }
   } catch (e) {
