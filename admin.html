@@ -429,7 +429,7 @@ async function saveConfig() {
 async function saveLotteryNotice() {
   try {
     const text = document.getElementById('lotteryNotice')?.value || '';
-    await API.setLotteryNotice({ text });
+    await API.setLotteryNotice(text);
     toast('抽奖说明已保存', 'success');
   } catch (e) {
     toast('保存失败: ' + e.message, 'error');
