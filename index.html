@@ -101,7 +101,14 @@ function toast(msg, type='info') {
   setTimeout(() => { el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),300); }, 2500);
 }
 
-function todayStr() { return new Date().toISOString().slice(0,10); }
+function todayStr() {
+  // 统一用北京时间日期（和后端一致）
+  const beijingTime = new Date(Date.now() + 8 * 3600 * 1000);
+  const y = beijingTime.getUTCFullYear();
+  const m = String(beijingTime.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(beijingTime.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 
 // ========== 签到逻辑 ==========
 async function doSignin() {
