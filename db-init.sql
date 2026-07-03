@@ -78,7 +78,19 @@ CREATE TABLE IF NOT EXISTS prize_codes (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 9. 自定义链接表
+-- 9. 兑换历史记录表
+CREATE TABLE IF NOT EXISTS exchange_history (
+  id BIGSERIAL PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  code TEXT NOT NULL,
+  prize_name TEXT NOT NULL,
+  prize_points INT NOT NULL DEFAULT 0,
+  source TEXT NOT NULL CHECK(source IN ('signin', 'lottery')),
+  ip_address TEXT,
+  exchanged_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 10. 自定义链接表
 CREATE TABLE IF NOT EXISTS custom_links (
   id BIGSERIAL PRIMARY KEY,
   name TEXT NOT NULL,
@@ -131,3 +143,5 @@ CREATE INDEX IF NOT EXISTS idx_draw_records_user ON draw_records(user_id);
 CREATE INDEX IF NOT EXISTS idx_point_transactions_user ON point_transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_prize_codes_code ON prize_codes(code);
 CREATE INDEX IF NOT EXISTS idx_prize_codes_used ON prize_codes(used_at);
+CREATE INDEX IF NOT EXISTS idx_exchange_history_user ON exchange_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_exchange_history_time ON exchange_history(exchanged_at);

@@ -9,6 +9,15 @@ function nowISO() {
   return new Date().toISOString();
 }
 
+// 获取客户端IP（Vercel 环境）
+function getClientIP(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.headers['x-real-ip'] || '';
+}
+
 // ========== 处理入口 ==========
 module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') {
@@ -142,6 +151,14 @@ module.exports = async (req, res) => {
           if (availableCodes.length > 0) {
             const code = availableCodes[0];
             signPrizeCode = { code: code.code, prizeName: code.prize_name, prizePoints: code.prize_points };
+
+            // 先写入兑换历史记录，再删除兑换码
+            const clientIP = getClientIP(req);
+            await sql`
+              INSERT INTO exchange_history (user_id, code, prize_name, prize_points, source, ip_address)
+              VALUES (${userId}, ${code.code}, ${code.prize_name}, ${code.prize_points}, 'signin', ${clientIP})
+            `;
+
             // 抽取后立即删除，不留数据
             await sql`DELETE FROM prize_codes WHERE id = ${code.id}`;
           }
@@ -302,6 +319,17 @@ module.exports = async (req, res) => {
         const { id } = data;
         await sql`DELETE FROM prize_codes WHERE id = ${id}`;
         return res.json({ ok: true });
+      }
+
+      // ---------- 兑换历史 ----------
+      case 'getExchangeHistory': {
+        const { rows } = await sql`
+          SELECT * FROM exchange_history
+          WHERE exchanged_at >= NOW() - INTERVAL '30 days'
+          ORDER BY exchanged_at DESC
+          LIMIT 500
+        `;
+        return res.json({ ok: true, data: rows });
       }
 
       // ---------- 自定义链接 ----------

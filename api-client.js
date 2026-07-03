@@ -61,6 +61,9 @@ const API = {
   usePrizeCode: (code, userId) => API.call('usePrizeCode', { code, userId }),
   deletePrizeCode: (id) => API.call('deletePrizeCode', { id }),
 
+  // ---------- 兑换历史 ----------
+  getExchangeHistory: () => API.call('getExchangeHistory'),
+
   // ---------- 自定义链接 ----------
   getLinks: () => API.call('getLinks'),
   addLink: (name, url) => API.call('addLink', { name, url }),

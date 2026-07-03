@@ -84,6 +84,30 @@
     color:var(--primary-light); font-size:12px;
   }
 
+  /* 兑换历史表格 */
+  .history-table {
+    width:100%; border-collapse:collapse; font-size:12px;
+  }
+  .history-table th {
+    text-align:left; padding:8px 10px; border-bottom:2px solid var(--border);
+    color:var(--text-muted); font-weight:600; font-size:11px; text-transform:uppercase;
+  }
+  .history-table td {
+    padding:7px 10px; border-bottom:1px solid var(--border); vertical-align:middle;
+  }
+  .history-table tr:last-child td { border-bottom:none; }
+  .history-table tr:hover { background:rgba(99,102,241,.04); }
+  .history-code {
+    font-family:"Courier New",monospace; color:var(--primary-light); font-weight:600;
+    letter-spacing:.5px; font-size:12px;
+  }
+  .history-source {
+    display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600;
+  }
+  .history-source.signin { background:#ede9fe; color:#7c3aed; }
+  .history-source.lottery { background:#fef3c7; color:#d97706; }
+  .history-empty { text-align:center; padding:30px 20px; color:var(--text-muted); font-size:13px; }
+
   /* 管理后台两列布局 */
   .container.admin-view { max-width: 860px; }
   .admin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -105,6 +129,7 @@ let appConfig = null;
 let prizeConfig = null;
 let prizeCodes = [];
 let customLinks = [];
+let exchangeHistory = [];
 let totalSigninUsers = 0;
 
 function toast(msg, type='info') {
@@ -182,17 +207,19 @@ async function doLogin() {
 // ========== 加载管理数据 ==========
 async function loadAdminData() {
   try {
-    const [config, prizes, codes, links, stats] = await Promise.all([
+    const [config, prizes, codes, links, history, stats] = await Promise.all([
       API.getConfig(),
       API.getPrizeConfig(),
       API.getAllPrizeCodes(),
       API.getLinks(),
+      API.getExchangeHistory(),
       API.getAllUsersStats()
     ]);
     appConfig = config;
     prizeConfig = prizes;
     prizeCodes = codes || [];
     customLinks = links || [];
+    exchangeHistory = history || [];
     totalSigninUsers = stats?.totalSigninUsers || 0;
   } catch (e) {
     console.error('加载管理数据失败:', e);
@@ -403,6 +430,43 @@ function renderAdmin() {
       </div>
 
       </div><!-- /admin-grid -->
+
+      <!-- 兑换历史（最近30天） -->
+      <div class="card mt-16">
+        <div class="card-title">
+          <span class="icon purple">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="3"/><path d="M2 8h20"/><path d="M8 2v20"/></svg>
+          </span>
+          兑换历史
+          <span class="text-muted" style="font-weight:400;margin-left:8px;">最近30天 · 共 ${exchangeHistory.length} 条</span>
+        </div>
+        <div id="exchangeHistoryList">
+          ${exchangeHistory.length === 0
+            ? `<div class="history-empty">最近30天暂无兑换记录</div>`
+            : `<table class="history-table">
+                <thead><tr>
+                  <th>兑换码</th>
+                  <th>奖品</th>
+                  <th>积分</th>
+                  <th>来源</th>
+                  <th>IP地址</th>
+                  <th>兑换时间</th>
+                </tr></thead>
+                <tbody>
+                  ${exchangeHistory.map(h => `
+                    <tr>
+                      <td><span class="history-code">${h.code}</span></td>
+                      <td>${h.prize_name}</td>
+                      <td>${h.prize_points}</td>
+                      <td><span class="history-source ${h.source}">${h.source === 'signin' ? '签到' : '抽奖'}</span></td>
+                      <td style="font-size:11px;color:var(--text-muted);">${h.ip_address || '-'}</td>
+                      <td style="font-size:11px;color:var(--text-muted);">${new Date(h.exchanged_at).toLocaleString('zh-CN')}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>`}
+        </div>
+      </div>
 
       <a href="index.html" class="btn btn-outline btn-sm back-btn" style="text-decoration:none;" title="返回首页">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
