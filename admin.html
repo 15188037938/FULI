@@ -331,6 +331,7 @@ function renderAdmin() {
           <span class="text-muted" style="font-size:11px;">关闭后用户无法充值</span>
         </div>
         <button class="btn btn-primary" onclick="saveConfig()">保存设置</button>
+        <button class="btn btn-danger btn-sm" onclick="resetTodaySignins()" style="margin-left:8px;">重置今日签到</button>
       </div>
 
       <!-- 抽奖说明 -->
@@ -487,6 +488,18 @@ async function saveConfig() {
     toast('签到设置已保存', 'success');
   } catch (e) {
     toast('保存失败: ' + e.message, 'error');
+  }
+}
+
+async function resetTodaySignins() {
+  if (!confirm('确定要重置今日签到吗？\n\n重置后所有用户今天可以重新签到（签到记录将被删除）')) return;
+  try {
+    const result = await API.resetTodaySignins();
+    toast(`已重置 ${result.resetCount} 条今日签到记录`, 'success');
+    await loadAdminData();
+    render();
+  } catch (e) {
+    toast('重置失败: ' + e.message, 'error');
   }
 }
 

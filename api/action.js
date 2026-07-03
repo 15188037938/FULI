@@ -199,8 +199,18 @@ module.exports = async (req, res) => {
       }
 
       case 'getTotalSigninUsers': {
-        const { rows } = await sql`SELECT DISTINCT user_id FROM sign_ins`;
-        return res.json({ ok: true, data: rows.length });
+        const { rows } = await sql`SELECT COUNT(DISTINCT user_id) AS cnt FROM sign_ins`;
+        return res.json({ ok: true, data: rows[0]?.cnt || 0 });
+      }
+
+      // ---------- 重置今日签到 ----------
+      case 'resetTodaySignins': {
+        const today = todayStr();
+        const { rows } = await sql`
+          DELETE FROM sign_ins WHERE sign_date = ${today}::DATE
+          RETURNING user_id
+        `;
+        return res.json({ ok: true, data: { resetCount: rows.length } });
       }
 
       // ---------- 积分 ----------

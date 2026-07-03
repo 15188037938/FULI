@@ -44,6 +44,7 @@ const API = {
   getSignins: (userId) => API.call('getSignins', { userId }),
   getSigninToday: (userId) => API.call('getSigninToday', { userId }),
   getTotalSigninUsers: () => API.call('getTotalSigninUsers'),
+  resetTodaySignins: () => API.call('resetTodaySignins'),
 
   // ---------- 积分 ----------
   getPoints: (userId) => API.call('getPoints', { userId }),
