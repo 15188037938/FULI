@@ -312,6 +312,34 @@ module.exports = async (req, res) => {
         return res.json({ ok: true, data: { totalSigninUsers: rows.length } });
       }
 
+      // ---------- 兑换记录（分页）----------
+      case 'getRedeemHistory': {
+        const page = Math.max(1, parseInt(data?.page) || 1);
+        const pageSize = Math.max(1, Math.min(200, parseInt(data?.pageSize) || 50));
+        const offset = (page - 1) * pageSize;
+
+        const { rows } = await sql`
+          SELECT * FROM prize_codes
+          WHERE used_at IS NOT NULL
+          ORDER BY used_at DESC
+          LIMIT ${pageSize} OFFSET ${offset}
+        `;
+        const { rows: countRows } = await sql`
+          SELECT COUNT(*)::INT as total FROM prize_codes WHERE used_at IS NOT NULL
+        `;
+        const total = countRows[0]?.total || 0;
+        return res.json({
+          ok: true,
+          data: {
+            records: rows,
+            total,
+            page,
+            pageSize,
+            totalPages: Math.ceil(total / pageSize)
+          }
+        });
+      }
+
       default:
         return res.status(400).json({ ok: false, error: `未知 action: ${action}` });
     }

@@ -90,6 +90,29 @@
   .admin-grid .card { margin-top: 0; margin-bottom: 0; }
   .admin-grid .mt-20 { margin-top: 0; }
   .admin-wide { grid-column: 1 / -1; }
+
+  /* 分页控件 */
+  .pagination {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 0 0; font-size:13px;
+  }
+  .pagination .page-info { color:var(--text-muted); }
+  .pagination .page-btns { display:flex; gap:6px; }
+  .pagination .page-btn {
+    padding:4px 12px; border:1px solid var(--border); border-radius:var(--radius-sm);
+    background:var(--bg); color:var(--text); cursor:pointer; font-size:13px;
+    transition:all var(--transition);
+  }
+  .pagination .page-btn:hover:not(:disabled) { border-color:var(--primary); color:var(--primary-light); }
+  .pagination .page-btn:disabled { opacity:0.4; cursor:not-allowed; }
+  .pagination .page-btn.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+
+  /* 兑换记录表格 */
+  .redeem-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .redeem-table th { color:var(--text-muted); font-weight:500; font-size:12px; text-transform:uppercase; letter-spacing:0.5px; padding:8px 10px; text-align:left; border-bottom:1px solid var(--border); }
+  .redeem-table td { padding:8px 10px; border-bottom:1px solid var(--border); }
+  .redeem-table tr:hover td { background:rgba(99,102,241,.03); }
+  .redeem-table .code-cell { font-family:"Courier New",monospace; color:var(--primary-light); font-size:12px; }
 </style>
 </head>
 <body>
@@ -106,6 +129,7 @@ let prizeConfig = null;
 let prizeCodes = [];
 let customLinks = [];
 let totalSigninUsers = 0;
+let redeemHistory = { records: [], total: 0, page: 1, pageSize: 50, totalPages: 0 };
 
 function toast(msg, type='info') {
   const el = document.createElement('div');
@@ -182,18 +206,20 @@ async function doLogin() {
 // ========== 加载管理数据 ==========
 async function loadAdminData() {
   try {
-    const [config, prizes, codes, links, stats] = await Promise.all([
+    const [config, prizes, codes, links, stats, history] = await Promise.all([
       API.getConfig(),
       API.getPrizeConfig(),
       API.getAllPrizeCodes(),
       API.getLinks(),
-      API.getAllUsersStats()
+      API.getAllUsersStats(),
+      API.getRedeemHistory(1, 50)
     ]);
     appConfig = config;
     prizeConfig = prizes;
     prizeCodes = codes || [];
     customLinks = links || [];
     totalSigninUsers = stats?.totalSigninUsers || 0;
+    redeemHistory = history || { records: [], total: 0, page: 1, pageSize: 50, totalPages: 0 };
   } catch (e) {
     console.error('加载管理数据失败:', e);
   }
@@ -400,6 +426,20 @@ function renderAdmin() {
           <span class="text-muted" style="font-weight:400;margin-left:8px;">共 ${customLinks.length} 个</span>
         </div>
         <div id="linksList">${linksHtml}</div>
+      </div>
+
+      <!-- 兑换记录 -->
+      <div class="card admin-wide">
+        <div class="card-title">
+          <span class="icon green">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          </span>
+          兑换记录
+          <span class="text-muted" style="font-weight:400;margin-left:8px;">共 ${redeemHistory.total} 条</span>
+        </div>
+        <div id="redeemHistoryList">
+          ${renderRedeemHistory()}
+        </div>
       </div>
 
       </div><!-- /admin-grid -->
@@ -645,6 +685,88 @@ function doLogout() {
   state = 'login';
   render();
   toast('已退出', 'info');
+}
+
+// ========== 兑换记录分页 ==========
+function renderRedeemHistory() {
+  const { records, total, page, pageSize, totalPages } = redeemHistory;
+
+  if (records.length === 0) {
+    return `<div class="empty-state"><p>暂无兑换记录</p></div>`;
+  }
+
+  const tableHtml = `
+    <div class="table-wrap">
+      <table class="redeem-table">
+        <thead>
+          <tr>
+            <th>兑换码</th>
+            <th>奖品</th>
+            <th>积分</th>
+            <th>用户</th>
+            <th>兑换时间</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${records.map(r => `
+            <tr>
+              <td class="code-cell">${r.code}</td>
+              <td>${r.prize_name}</td>
+              <td style="color:var(--success);font-weight:600;">+${r.prize_points}</td>
+              <td style="font-size:11px;color:var(--text-muted);">${(r.used_by || '').slice(0, 12)}</td>
+              <td style="font-size:12px;color:var(--text-muted);">${r.used_at ? new Date(r.used_at).toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(page * pageSize, total);
+
+  let pageBtns = '';
+  // 最多显示 7 个页码按钮
+  let startPage = Math.max(1, page - 3);
+  let endPage = Math.min(totalPages, startPage + 6);
+  if (endPage - startPage < 6) startPage = Math.max(1, endPage - 6);
+
+  if (startPage > 1) {
+    pageBtns += `<button class="page-btn" onclick="loadRedeemHistory(1)">1</button>`;
+    if (startPage > 2) pageBtns += `<span style="color:var(--text-muted);">...</span>`;
+  }
+  for (let i = startPage; i <= endPage; i++) {
+    pageBtns += `<button class="page-btn ${i === page ? 'active' : ''}" onclick="loadRedeemHistory(${i})">${i}</button>`;
+  }
+  if (endPage < totalPages) {
+    if (endPage < totalPages - 1) pageBtns += `<span style="color:var(--text-muted);">...</span>`;
+    pageBtns += `<button class="page-btn" onclick="loadRedeemHistory(${totalPages})">${totalPages}</button>`;
+  }
+
+  const paginationHtml = `
+    <div class="pagination">
+      <span class="page-info">第 ${start}-${end} 条 / 共 ${total} 条</span>
+      <div class="page-btns">
+        <button class="page-btn" onclick="loadRedeemHistory(${page - 1})" ${page <= 1 ? 'disabled' : ''}>上一页</button>
+        ${pageBtns}
+        <button class="page-btn" onclick="loadRedeemHistory(${page + 1})" ${page >= totalPages ? 'disabled' : ''}>下一页</button>
+      </div>
+    </div>
+  `;
+
+  return tableHtml + paginationHtml;
+}
+
+async function loadRedeemHistory(page) {
+  if (page < 1) return;
+  try {
+    redeemHistory = await API.getRedeemHistory(page, 50);
+    // 只更新兑换记录区域，不重新渲染整个页面
+    const el = document.getElementById('redeemHistoryList');
+    if (el) el.innerHTML = renderRedeemHistory();
+  } catch (e) {
+    console.error('加载兑换记录失败:', e);
+  }
 }
 
 // ========== 初始化 ==========

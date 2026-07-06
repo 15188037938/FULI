@@ -68,4 +68,5 @@ const API = {
 
   // ---------- 管理后台 ----------
   getAllUsersStats: () => API.call('getAllUsersStats'),
+  getRedeemHistory: (page = 1, pageSize = 50) => API.call('getRedeemHistory', { page, pageSize }),
 };
