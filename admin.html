@@ -289,7 +289,7 @@ function renderAdmin() {
         </div>
         <div class="form-group">
           <label>每次签到积分</label>
-          <input type="number" class="input" id="signinPoints" value="${appConfig.signinPoints}" min="1" max="9999">
+          <input type="number" class="input" id="signinPoints" value="${appConfig.signinPoints}" min="0" max="9999" step="0.01">
         </div>
         <div class="form-group">
           <label>管理员密码</label>
@@ -416,7 +416,7 @@ function renderAdmin() {
 // ========== 操作函数 ==========
 async function saveConfig() {
   try {
-    appConfig.signinPoints = parseInt(document.getElementById('signinPoints').value) || 5;
+    appConfig.signinPoints = parseFloat(document.getElementById('signinPoints').value) || 5;
     appConfig.adminPassword = document.getElementById('adminPassword').value.trim() || 'admin123';
     appConfig.rechargeEnabled = document.getElementById('rechargeEnabled')?.value !== '0';
     await API.setConfig(appConfig);
