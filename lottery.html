@@ -124,6 +124,19 @@
     <div class="result-card" id="resultCard"></div>
   </div>
 
+  <!-- 中奖记录（含兑换码） -->
+  <div class="card mt-20" id="drawHistoryCard">
+    <div class="card-title">
+      <span class="icon purple">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      </span>
+      中奖记录
+    </div>
+    <div id="drawHistoryList" style="max-height:200px;overflow-y:auto;">
+      <p class="text-muted text-center">加载中...</p>
+    </div>
+  </div>
+
   <a href="index.html" class="btn btn-outline btn-sm back-btn" style="text-decoration:none;" title="返回首页">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
     返回
@@ -185,6 +198,23 @@ function toast(msg, type='info') {
   el.className = 'toast ' + type; el.textContent = msg;
   document.getElementById('toastContainer').appendChild(el);
   setTimeout(() => { el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),300); }, 2500);
+}
+
+// 复制兑换码（兼容各浏览器）
+function copyCode(code) {
+  const ta = document.createElement('textarea');
+  ta.value = code;
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand('copy');
+    toast('已复制', 'success');
+  } catch (e) {
+    toast('复制失败，请手动复制', 'error');
+  }
+  ta.remove();
 }
 
 // ========== Canvas 转盘 ==========
@@ -323,6 +353,9 @@ async function onSpinComplete(idx, costFree) {
     balance = result.points;
     updateStats();
 
+    // 刷新中奖记录
+    loadDrawHistory();
+
     // 显示结果
     document.getElementById('resultArea').classList.remove('hidden');
     const card = document.getElementById('resultCard');
@@ -339,7 +372,11 @@ async function onSpinComplete(idx, costFree) {
           ${prize.name}${costLabel}
         </div>
         <div class="result-desc">
-          ${isWin && prize.points > 0 ? '恭喜中奖！积分已自动到账。' : isWin && prize.points === 0 ? '恭喜中奖！' : '再接再厉，下次好运！'}
+          ${result.prizeCode
+            ? `<span style="color:var(--warning);">🎁 兑换码: <span style="font-family:monospace;cursor:pointer;" onclick="copyCode('${result.prizeCode}')">${result.prizeCode}</span> (${result.prizeName})</span>`
+            : isWin && prize.points > 0
+              ? '恭喜中奖！暂无可兑换码'
+              : isWin ? '恭喜中奖！' : '再接再厉，下次好运！'}
         </div>
       </div>
     `;
@@ -376,7 +413,7 @@ async function showRechargeModal() {
   try {
     const config = await API.getConfig();
     if (config.rechargeEnabled === false) {
-      toast('充值通道暂时关闭，如需充值，请联系管理员', 'info');
+      toast('充值通道暂时关闭，如需充值请联系管理员QQ：9200563', 'info');
       return;
     }
   } catch (e) {
@@ -437,6 +474,29 @@ async function doRecharge() {
   }
 }
 
+// ========== 加载中奖记录 ==========
+async function loadDrawHistory() {
+  try {
+    const records = await API.getDrawHistory(userId);
+    const container = document.getElementById('drawHistoryList');
+    if (!records || records.length === 0) {
+      container.innerHTML = '<p class="text-muted text-center">暂无中奖记录</p>';
+    } else {
+      container.innerHTML = records.slice(0, 20).map(r => `
+        <div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-weight:500;">${r.prize_name}</span>
+            <span style="color:var(--text-muted);font-size:11px;">${new Date(r.drawn_at).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
+          </div>
+          ${r.prize_code ? `<div style="font-size:11px;color:var(--warning);margin-top:2px;">🎁 兑换码: <span style="font-family:monospace;cursor:pointer;" onclick="copyCode('${r.prize_code}')">${r.prize_code}</span></div>` : ''}
+        </div>
+      `).join('');
+    }
+  } catch (e) {
+    console.error('加载中奖记录失败:', e);
+  }
+}
+
 // ========== 初始化 ==========
 (async function init() {
   try {
@@ -462,6 +522,9 @@ async function doRecharge() {
     drawWheel(0);
     updateStats();
     updateSpinBtn();
+
+    // 加载中奖记录
+    await loadDrawHistory();
   } catch (e) {
     console.error('初始化失败:', e);
     toast('初始化失败，请检查网络', 'error');

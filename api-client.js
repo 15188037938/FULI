@@ -40,10 +40,12 @@ const API = {
   ensureUser: (userId) => API.call('ensureUser', { userId }),
 
   // ---------- 签到 ----------
-  signin: (userId) => API.call('signin', { userId }),
+  signin: (userId, deviceId, isEmulator) =>
+    API.call('signin', { userId, deviceId: deviceId || '', isEmulator: !!isEmulator }),
   getSignins: (userId) => API.call('getSignins', { userId }),
   getSigninToday: (userId) => API.call('getSigninToday', { userId }),
   getTotalSigninUsers: () => API.call('getTotalSigninUsers'),
+  resetTodaySignins: () => API.call('resetTodaySignins'),
 
   // ---------- 积分 ----------
   getPoints: (userId) => API.call('getPoints', { userId }),
@@ -60,6 +62,9 @@ const API = {
   addPrizeCodes: (codes) => API.call('addPrizeCodes', { codes }),
   usePrizeCode: (code, userId) => API.call('usePrizeCode', { code, userId }),
   deletePrizeCode: (id) => API.call('deletePrizeCode', { id }),
+
+  // ---------- 兑换历史 ----------
+  getExchangeHistory: () => API.call('getExchangeHistory'),
 
   // ---------- 自定义链接 ----------
   getLinks: () => API.call('getLinks'),

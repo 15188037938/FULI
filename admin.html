@@ -84,35 +84,36 @@
     color:var(--primary-light); font-size:12px;
   }
 
+  /* 兑换历史表格 */
+  .history-table {
+    width:100%; border-collapse:collapse; font-size:12px;
+  }
+  .history-table th {
+    text-align:left; padding:8px 10px; border-bottom:2px solid var(--border);
+    color:var(--text-muted); font-weight:600; font-size:11px; text-transform:uppercase;
+  }
+  .history-table td {
+    padding:7px 10px; border-bottom:1px solid var(--border); vertical-align:middle;
+  }
+  .history-table tr:last-child td { border-bottom:none; }
+  .history-table tr:hover { background:rgba(99,102,241,.04); }
+  .history-code {
+    font-family:"Courier New",monospace; color:var(--primary-light); font-weight:600;
+    letter-spacing:.5px; font-size:12px;
+  }
+  .history-source {
+    display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600;
+  }
+  .history-source.signin { background:#ede9fe; color:#7c3aed; }
+  .history-source.lottery { background:#fef3c7; color:#d97706; }
+  .history-empty { text-align:center; padding:30px 20px; color:var(--text-muted); font-size:13px; }
+
   /* 管理后台两列布局 */
   .container.admin-view { max-width: 860px; }
   .admin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   .admin-grid .card { margin-top: 0; margin-bottom: 0; }
   .admin-grid .mt-20 { margin-top: 0; }
   .admin-wide { grid-column: 1 / -1; }
-
-  /* 分页控件 */
-  .pagination {
-    display:flex; align-items:center; justify-content:space-between;
-    padding:12px 0 0; font-size:13px;
-  }
-  .pagination .page-info { color:var(--text-muted); }
-  .pagination .page-btns { display:flex; gap:6px; }
-  .pagination .page-btn {
-    padding:4px 12px; border:1px solid var(--border); border-radius:var(--radius-sm);
-    background:var(--bg); color:var(--text); cursor:pointer; font-size:13px;
-    transition:all var(--transition);
-  }
-  .pagination .page-btn:hover:not(:disabled) { border-color:var(--primary); color:var(--primary-light); }
-  .pagination .page-btn:disabled { opacity:0.4; cursor:not-allowed; }
-  .pagination .page-btn.active { background:var(--primary); color:#fff; border-color:var(--primary); }
-
-  /* 兑换记录表格 */
-  .redeem-table { width:100%; border-collapse:collapse; font-size:13px; }
-  .redeem-table th { color:var(--text-muted); font-weight:500; font-size:12px; text-transform:uppercase; letter-spacing:0.5px; padding:8px 10px; text-align:left; border-bottom:1px solid var(--border); }
-  .redeem-table td { padding:8px 10px; border-bottom:1px solid var(--border); }
-  .redeem-table tr:hover td { background:rgba(99,102,241,.03); }
-  .redeem-table .code-cell { font-family:"Courier New",monospace; color:var(--primary-light); font-size:12px; }
 </style>
 </head>
 <body>
@@ -128,8 +129,8 @@ let appConfig = null;
 let prizeConfig = null;
 let prizeCodes = [];
 let customLinks = [];
+let exchangeHistory = [];
 let totalSigninUsers = 0;
-let redeemHistory = { records: [], total: 0, page: 1, pageSize: 50, totalPages: 0 };
 
 function toast(msg, type='info') {
   const el = document.createElement('div');
@@ -206,20 +207,20 @@ async function doLogin() {
 // ========== 加载管理数据 ==========
 async function loadAdminData() {
   try {
-    const [config, prizes, codes, links, stats, history] = await Promise.all([
+    const [config, prizes, codes, links, history, stats] = await Promise.all([
       API.getConfig(),
       API.getPrizeConfig(),
       API.getAllPrizeCodes(),
       API.getLinks(),
-      API.getAllUsersStats(),
-      API.getRedeemHistory(1, 50)
+      API.getExchangeHistory(),
+      API.getAllUsersStats()
     ]);
     appConfig = config;
     prizeConfig = prizes;
     prizeCodes = codes || [];
     customLinks = links || [];
+    exchangeHistory = history || [];
     totalSigninUsers = stats?.totalSigninUsers || 0;
-    redeemHistory = history || { records: [], total: 0, page: 1, pageSize: 50, totalPages: 0 };
   } catch (e) {
     console.error('加载管理数据失败:', e);
   }
@@ -315,7 +316,7 @@ function renderAdmin() {
         </div>
         <div class="form-group">
           <label>每次签到积分</label>
-          <input type="number" class="input" id="signinPoints" value="${appConfig.signinPoints}" min="0" max="9999" step="0.01">
+          <input type="number" class="input" id="signinPoints" value="${appConfig.signinPoints}" min="1" max="9999">
         </div>
         <div class="form-group">
           <label>管理员密码</label>
@@ -330,6 +331,7 @@ function renderAdmin() {
           <span class="text-muted" style="font-size:11px;">关闭后用户无法充值</span>
         </div>
         <button class="btn btn-primary" onclick="saveConfig()">保存设置</button>
+        <button class="btn btn-danger btn-sm" onclick="resetTodaySignins()" style="margin-left:8px;">重置今日签到</button>
       </div>
 
       <!-- 抽奖说明 -->
@@ -428,21 +430,44 @@ function renderAdmin() {
         <div id="linksList">${linksHtml}</div>
       </div>
 
-      <!-- 兑换记录 -->
-      <div class="card admin-wide">
+      </div><!-- /admin-grid -->
+
+      <!-- 兑换历史（最近30天） -->
+      <div class="card mt-16">
         <div class="card-title">
-          <span class="icon green">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          <span class="icon purple">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="3"/><path d="M2 8h20"/><path d="M8 2v20"/></svg>
           </span>
-          兑换记录
-          <span class="text-muted" style="font-weight:400;margin-left:8px;">共 ${redeemHistory.total} 条</span>
+          兑换历史
+          <span class="text-muted" style="font-weight:400;margin-left:8px;">最近30天 · 共 ${exchangeHistory.length} 条</span>
         </div>
-        <div id="redeemHistoryList">
-          ${renderRedeemHistory()}
+        <div id="exchangeHistoryList">
+          ${exchangeHistory.length === 0
+            ? `<div class="history-empty">最近30天暂无兑换记录</div>`
+            : `<table class="history-table">
+                <thead><tr>
+                  <th>兑换码</th>
+                  <th>奖品</th>
+                  <th>积分</th>
+                  <th>来源</th>
+                  <th>IP地址</th>
+                  <th>兑换时间</th>
+                </tr></thead>
+                <tbody>
+                  ${exchangeHistory.map(h => `
+                    <tr>
+                      <td><span class="history-code">${h.code}</span></td>
+                      <td>${h.prize_name}</td>
+                      <td>${h.prize_points}</td>
+                      <td><span class="history-source ${h.source}">${h.source === 'signin' ? '签到' : '抽奖'}</span></td>
+                      <td style="font-size:11px;color:var(--text-muted);">${h.ip_address || '-'}</td>
+                      <td style="font-size:11px;color:var(--text-muted);">${new Date(h.exchanged_at).toLocaleString('zh-CN')}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>`}
         </div>
       </div>
-
-      </div><!-- /admin-grid -->
 
       <a href="index.html" class="btn btn-outline btn-sm back-btn" style="text-decoration:none;" title="返回首页">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
@@ -456,7 +481,7 @@ function renderAdmin() {
 // ========== 操作函数 ==========
 async function saveConfig() {
   try {
-    appConfig.signinPoints = parseFloat(document.getElementById('signinPoints').value) || 5;
+    appConfig.signinPoints = parseInt(document.getElementById('signinPoints').value) || 5;
     appConfig.adminPassword = document.getElementById('adminPassword').value.trim() || 'admin123';
     appConfig.rechargeEnabled = document.getElementById('rechargeEnabled')?.value !== '0';
     await API.setConfig(appConfig);
@@ -466,10 +491,22 @@ async function saveConfig() {
   }
 }
 
+async function resetTodaySignins() {
+  if (!confirm('确定要重置今日签到吗？\n\n重置后所有用户今天可以重新签到（签到记录将被删除）')) return;
+  try {
+    const result = await API.resetTodaySignins();
+    toast(`已重置 ${result.resetCount} 条今日签到记录`, 'success');
+    await loadAdminData();
+    render();
+  } catch (e) {
+    toast('重置失败: ' + e.message, 'error');
+  }
+}
+
 async function saveLotteryNotice() {
   try {
     const text = document.getElementById('lotteryNotice')?.value || '';
-    await API.setLotteryNotice({ text });
+    await API.setLotteryNotice(text);
     toast('抽奖说明已保存', 'success');
   } catch (e) {
     toast('保存失败: ' + e.message, 'error');
@@ -480,7 +517,11 @@ async function loadLotteryNotice() {
   try {
     const notice = await API.getLotteryNotice();
     const el = document.getElementById('lotteryNotice');
-    if (el && notice?.text) el.value = notice.text;
+    if (el) {
+      // 兼容两种格式：{ text: "..." } 或纯字符串
+      const text = (notice && typeof notice === 'object') ? (notice.text || '') : (notice || '');
+      if (text) el.value = text;
+    }
   } catch (e) {
     console.error('加载抽奖说明失败:', e);
   }
@@ -685,88 +726,6 @@ function doLogout() {
   state = 'login';
   render();
   toast('已退出', 'info');
-}
-
-// ========== 兑换记录分页 ==========
-function renderRedeemHistory() {
-  const { records, total, page, pageSize, totalPages } = redeemHistory;
-
-  if (records.length === 0) {
-    return `<div class="empty-state"><p>暂无兑换记录</p></div>`;
-  }
-
-  const tableHtml = `
-    <div class="table-wrap">
-      <table class="redeem-table">
-        <thead>
-          <tr>
-            <th>兑换码</th>
-            <th>奖品</th>
-            <th>积分</th>
-            <th>用户</th>
-            <th>兑换时间</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${records.map(r => `
-            <tr>
-              <td class="code-cell">${r.code}</td>
-              <td>${r.prize_name}</td>
-              <td style="color:var(--success);font-weight:600;">+${r.prize_points}</td>
-              <td style="font-size:11px;color:var(--text-muted);">${(r.used_by || '').slice(0, 12)}</td>
-              <td style="font-size:12px;color:var(--text-muted);">${r.used_at ? new Date(r.used_at).toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-'}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
-  `;
-
-  const start = (page - 1) * pageSize + 1;
-  const end = Math.min(page * pageSize, total);
-
-  let pageBtns = '';
-  // 最多显示 7 个页码按钮
-  let startPage = Math.max(1, page - 3);
-  let endPage = Math.min(totalPages, startPage + 6);
-  if (endPage - startPage < 6) startPage = Math.max(1, endPage - 6);
-
-  if (startPage > 1) {
-    pageBtns += `<button class="page-btn" onclick="loadRedeemHistory(1)">1</button>`;
-    if (startPage > 2) pageBtns += `<span style="color:var(--text-muted);">...</span>`;
-  }
-  for (let i = startPage; i <= endPage; i++) {
-    pageBtns += `<button class="page-btn ${i === page ? 'active' : ''}" onclick="loadRedeemHistory(${i})">${i}</button>`;
-  }
-  if (endPage < totalPages) {
-    if (endPage < totalPages - 1) pageBtns += `<span style="color:var(--text-muted);">...</span>`;
-    pageBtns += `<button class="page-btn" onclick="loadRedeemHistory(${totalPages})">${totalPages}</button>`;
-  }
-
-  const paginationHtml = `
-    <div class="pagination">
-      <span class="page-info">第 ${start}-${end} 条 / 共 ${total} 条</span>
-      <div class="page-btns">
-        <button class="page-btn" onclick="loadRedeemHistory(${page - 1})" ${page <= 1 ? 'disabled' : ''}>上一页</button>
-        ${pageBtns}
-        <button class="page-btn" onclick="loadRedeemHistory(${page + 1})" ${page >= totalPages ? 'disabled' : ''}>下一页</button>
-      </div>
-    </div>
-  `;
-
-  return tableHtml + paginationHtml;
-}
-
-async function loadRedeemHistory(page) {
-  if (page < 1) return;
-  try {
-    redeemHistory = await API.getRedeemHistory(page, 50);
-    // 只更新兑换记录区域，不重新渲染整个页面
-    const el = document.getElementById('redeemHistoryList');
-    if (el) el.innerHTML = renderRedeemHistory();
-  } catch (e) {
-    console.error('加载兑换记录失败:', e);
-  }
 }
 
 // ========== 初始化 ==========
