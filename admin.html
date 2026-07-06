@@ -108,6 +108,22 @@
   .history-source.lottery { background:#fef3c7; color:#d97706; }
   .history-empty { text-align:center; padding:30px 20px; color:var(--text-muted); font-size:13px; }
 
+  /* 分页控件 */
+  .pagination {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 0 0; font-size:13px; flex-wrap:wrap; gap:6px;
+  }
+  .pagination .page-info { color:var(--text-muted); font-size:12px; }
+  .pagination .page-btns { display:flex; gap:4px; }
+  .pagination .page-btn {
+    padding:4px 10px; border:1px solid var(--border); border-radius:var(--radius-sm);
+    background:var(--bg); color:var(--text); cursor:pointer; font-size:12px; min-width:28px; text-align:center;
+    transition:all var(--transition);
+  }
+  .pagination .page-btn:hover:not(:disabled) { border-color:var(--primary); color:var(--primary-light); }
+  .pagination .page-btn:disabled { opacity:0.4; cursor:not-allowed; }
+  .pagination .page-btn.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+
   /* 管理后台两列布局 */
   .container.admin-view { max-width: 860px; }
   .admin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -129,7 +145,7 @@ let appConfig = null;
 let prizeConfig = null;
 let prizeCodes = [];
 let customLinks = [];
-let exchangeHistory = [];
+let exchangeHistory = { records: [], total: 0, page: 1, pageSize: 50, totalPages: 0 };
 let totalSigninUsers = 0;
 
 function toast(msg, type='info') {
@@ -212,14 +228,14 @@ async function loadAdminData() {
       API.getPrizeConfig(),
       API.getAllPrizeCodes(),
       API.getLinks(),
-      API.getExchangeHistory(),
+      API.getExchangeHistory(1, 50),
       API.getAllUsersStats()
     ]);
     appConfig = config;
     prizeConfig = prizes;
     prizeCodes = codes || [];
     customLinks = links || [];
-    exchangeHistory = history || [];
+    exchangeHistory = history || { records: [], total: 0, page: 1, pageSize: 50, totalPages: 0 };
     totalSigninUsers = stats?.totalSigninUsers || 0;
   } catch (e) {
     console.error('加载管理数据失败:', e);
@@ -432,40 +448,17 @@ function renderAdmin() {
 
       </div><!-- /admin-grid -->
 
-      <!-- 兑换历史（最近30天） -->
-      <div class="card mt-16">
+      <!-- 兑换历史（分页） -->
+      <div class="card mt-16 admin-wide">
         <div class="card-title">
           <span class="icon purple">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="3"/><path d="M2 8h20"/><path d="M8 2v20"/></svg>
           </span>
           兑换历史
-          <span class="text-muted" style="font-weight:400;margin-left:8px;">最近30天 · 共 ${exchangeHistory.length} 条</span>
+          <span class="text-muted" style="font-weight:400;margin-left:8px;" id="historyTotal">共 0 条</span>
         </div>
         <div id="exchangeHistoryList">
-          ${exchangeHistory.length === 0
-            ? `<div class="history-empty">最近30天暂无兑换记录</div>`
-            : `<table class="history-table">
-                <thead><tr>
-                  <th>兑换码</th>
-                  <th>奖品</th>
-                  <th>积分</th>
-                  <th>来源</th>
-                  <th>IP地址</th>
-                  <th>兑换时间</th>
-                </tr></thead>
-                <tbody>
-                  ${exchangeHistory.map(h => `
-                    <tr>
-                      <td><span class="history-code">${h.code}</span></td>
-                      <td>${h.prize_name}</td>
-                      <td>${h.prize_points}</td>
-                      <td><span class="history-source ${h.source}">${h.source === 'signin' ? '签到' : '抽奖'}</span></td>
-                      <td style="font-size:11px;color:var(--text-muted);">${h.ip_address || '-'}</td>
-                      <td style="font-size:11px;color:var(--text-muted);">${new Date(h.exchanged_at).toLocaleString('zh-CN')}</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>`}
+          ${renderExchangeHistory()}
         </div>
       </div>
 
@@ -726,6 +719,89 @@ function doLogout() {
   state = 'login';
   render();
   toast('已退出', 'info');
+}
+
+// ========== 兑换历史分页 ==========
+function renderExchangeHistory() {
+  const { records, total, page, pageSize, totalPages } = exchangeHistory;
+
+  if (records.length === 0) {
+    return `<div class="history-empty">暂无兑换记录</div>`;
+  }
+
+  const tableHtml = `
+    <div class="table-wrap" style="overflow-x:auto;">
+      <table class="history-table">
+        <thead><tr>
+          <th>兑换码</th>
+          <th>奖品</th>
+          <th>积分</th>
+          <th>来源</th>
+          <th>IP地址</th>
+          <th>兑换时间</th>
+        </tr></thead>
+        <tbody>
+          ${records.map(h => `
+            <tr>
+              <td><span class="history-code">${h.code}</span></td>
+              <td>${h.prize_name}</td>
+              <td style="color:var(--success);font-weight:600;">+${h.prize_points}</td>
+              <td><span class="history-source ${h.source || ''}">${h.source === 'signin' ? '签到' : h.source === 'lottery' ? '抽奖' : (h.source || '-')}</span></td>
+              <td style="font-size:11px;color:var(--text-muted);">${h.ip_address || '-'}</td>
+              <td style="font-size:11px;color:var(--text-muted);">${h.exchanged_at ? new Date(h.exchanged_at).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(page * pageSize, total);
+
+  // 页码按钮（最多显示 7 个）
+  let startPage = Math.max(1, page - 3);
+  let endPage = Math.min(totalPages, startPage + 6);
+  if (endPage - startPage < 6) startPage = Math.max(1, endPage - 6);
+
+  let pageBtns = '';
+  if (startPage > 1) {
+    pageBtns += `<button class="page-btn" onclick="loadExchangeHistory(1)">1</button>`;
+    if (startPage > 2) pageBtns += `<span style="color:var(--text-muted);font-size:12px;">…</span>`;
+  }
+  for (let i = startPage; i <= endPage; i++) {
+    pageBtns += `<button class="page-btn ${i === page ? 'active' : ''}" onclick="loadExchangeHistory(${i})">${i}</button>`;
+  }
+  if (endPage < totalPages) {
+    if (endPage < totalPages - 1) pageBtns += `<span style="color:var(--text-muted);font-size:12px;">…</span>`;
+    pageBtns += `<button class="page-btn" onclick="loadExchangeHistory(${totalPages})">${totalPages}</button>`;
+  }
+
+  const paginationHtml = `
+    <div class="pagination">
+      <span class="page-info">第 ${start}-${end} 条 / 共 ${total} 条</span>
+      <div class="page-btns">
+        <button class="page-btn" onclick="loadExchangeHistory(${page - 1})" ${page <= 1 ? 'disabled' : ''}>上一页</button>
+        ${pageBtns}
+        <button class="page-btn" onclick="loadExchangeHistory(${page + 1})" ${page >= totalPages ? 'disabled' : ''}>下一页</button>
+      </div>
+    </div>
+  `;
+
+  return tableHtml + paginationHtml;
+}
+
+async function loadExchangeHistory(page) {
+  if (page < 1) return;
+  try {
+    exchangeHistory = await API.getExchangeHistory(page, 50);
+    const el = document.getElementById('exchangeHistoryList');
+    if (el) el.innerHTML = renderExchangeHistory();
+    const totalEl = document.getElementById('historyTotal');
+    if (totalEl) totalEl.textContent = `共 ${exchangeHistory.total} 条`;
+  } catch (e) {
+    console.error('加载兑换历史失败:', e);
+  }
 }
 
 // ========== 初始化 ==========

@@ -414,14 +414,31 @@ module.exports = async (req, res) => {
       }
 
       // ---------- 兑换历史 ----------
+            // ---------- 兑换历史（分页） ----------
       case 'getExchangeHistory': {
+        const page = Math.max(1, parseInt(data?.page) || 1);
+        const pageSize = Math.max(1, Math.min(200, parseInt(data?.pageSize) || 50));
+        const offset = (page - 1) * pageSize;
+
         const { rows } = await sql`
           SELECT * FROM exchange_history
-          WHERE exchanged_at >= NOW() - INTERVAL '30 days'
           ORDER BY exchanged_at DESC
-          LIMIT 500
+          LIMIT ${pageSize} OFFSET ${offset}
         `;
-        return res.json({ ok: true, data: rows });
+        const { rows: countRows } = await sql`
+          SELECT COUNT(*)::INT as total FROM exchange_history
+        `;
+        const total = countRows[0]?.total || 0;
+        return res.json({
+          ok: true,
+          data: {
+            records: rows,
+            total,
+            page,
+            pageSize,
+            totalPages: Math.ceil(total / pageSize)
+          }
+        });
       }
 
       // ---------- 自定义链接 ----------
