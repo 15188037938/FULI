@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS sign_ins (
   id BIGSERIAL PRIMARY KEY,
   user_id TEXT NOT NULL,
   sign_date DATE NOT NULL DEFAULT CURRENT_DATE,
-  points_earned INT NOT NULL DEFAULT 5,
+  points_earned DECIMAL(10,2) NOT NULL DEFAULT 5,
   prize_code TEXT DEFAULT '',
   prize_name TEXT DEFAULT '',
   client_ip TEXT DEFAULT '',
@@ -38,9 +38,9 @@ CREATE TABLE IF NOT EXISTS sign_ins (
 CREATE TABLE IF NOT EXISTS points (
   id BIGSERIAL PRIMARY KEY,
   user_id TEXT UNIQUE NOT NULL,
-  balance INT NOT NULL DEFAULT 0,
-  total_earned INT NOT NULL DEFAULT 0,
-  total_spent INT NOT NULL DEFAULT 0,
+  balance DECIMAL(10,2) NOT NULL DEFAULT 0,
+  total_earned DECIMAL(10,2) NOT NULL DEFAULT 0,
+  total_spent DECIMAL(10,2) NOT NULL DEFAULT 0,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS free_draws (
 CREATE TABLE IF NOT EXISTS point_transactions (
   id BIGSERIAL PRIMARY KEY,
   user_id TEXT NOT NULL,
-  amount INT NOT NULL,
+  amount DECIMAL(10,2) NOT NULL,
   type TEXT CHECK(type IN ('earn', 'spend', 'recharge')),
   description TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS prize_codes (
   id BIGSERIAL PRIMARY KEY,
   code TEXT UNIQUE NOT NULL,
   prize_name TEXT NOT NULL,
-  prize_points INT NOT NULL DEFAULT 0,
+  prize_points DECIMAL(10,2) NOT NULL DEFAULT 0,
   used_by TEXT,
   used_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS exchange_history (
   user_id TEXT NOT NULL,
   code TEXT NOT NULL,
   prize_name TEXT NOT NULL,
-  prize_points INT NOT NULL DEFAULT 0,
+  prize_points DECIMAL(10,2) NOT NULL DEFAULT 0,
   source TEXT NOT NULL CHECK(source IN ('signin', 'lottery')),
   ip_address TEXT,
   exchanged_at TIMESTAMPTZ DEFAULT NOW()
@@ -108,7 +108,7 @@ CREATE TABLE IF NOT EXISTS custom_links (
 -- 10. RPC: 增加积分
 CREATE OR REPLACE FUNCTION increment_points(
   p_user_id TEXT,
-  p_amount INT,
+  p_amount DECIMAL(10,2),
   p_type TEXT,
   p_desc TEXT DEFAULT ''
 )
