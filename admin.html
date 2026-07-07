@@ -556,8 +556,9 @@ async function savePrizeConfig() {
     prizes[i].name = name;
     prizes[i].weight = weight;
     prizes[i].id = i;
-    let points = parseInt(name);
-    if (isNaN(points)) points = 0;
+    let points = parseFloat(name);
+    if (isNaN(points) || points < 0) points = 0;
+    // 保留已有小数值（防止名称变更时丢失 0.5 等非整数积分）
     if (points === 0 && name !== '谢谢参与' && prizes[i].points && prizes[i].points > 0) {
       points = prizes[i].points;
     }
